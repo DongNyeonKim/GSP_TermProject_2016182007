@@ -32,6 +32,7 @@ constexpr char OP_MODE_SEND = 1;
 constexpr char OP_MODE_ACCEPT = 2;
 constexpr char OP_RANDOM_MOVE = 3;
 constexpr char OP_PLAYER_MOVE_NOTIFY = 4;
+constexpr char OP_PLAYER_MOVE_1s = 5;
 
 constexpr int  KEY_SERVER = 1000000;
 
@@ -50,6 +51,8 @@ struct client_info {
     short hp;
     short level;
     short exp;
+
+    bool move_1s_time;
 
     mutex lua_lock;
     lua_State* L;
@@ -131,6 +134,13 @@ void time_worker()
 
                     //random_move_npc(ev.obj_id);
                     //add_timer(ev.obj_id, OP_RANDOM_MOVE, system_clock::now() + 1s);
+                    break;
+                }
+                else if (ev.event_id == OP_PLAYER_MOVE_1s) {
+                    OVER_EX* send_over = new OVER_EX();
+                    send_over->op_mode = ev.event_id;
+                    PostQueuedCompletionStatus(h_iocp, 1, ev.obj_id, &send_over->wsa_over);
+
                     break;
                 }
             }
@@ -263,6 +273,7 @@ void send_leave_packet(int to_client, int new_id)
 
 void process_move(int id, char dir)
 {
+    if (true == g_clients[id].move_1s_time) return;
     short y = g_clients[id].y;
     short x = g_clients[id].x;
     switch (dir) {
@@ -701,6 +712,10 @@ void process_move(int id, char dir)
             PostQueuedCompletionStatus(h_iocp, 1, npc, &ex_over->wsa_over);
         }
     }
+
+    g_clients[id].move_1s_time = true;
+    add_timer(id, OP_PLAYER_MOVE_1s, system_clock::now() + 1s);
+
 }
 
 void process_packet(int id)
@@ -1341,7 +1356,6 @@ void worker_thread()
         {
             random_move_npc(key);
             //bool active = false;
-
             //for (int i = 0; i < MAX_USER; ++i)
             //{
             //   if(true==is_near(key,i))
@@ -1358,14 +1372,19 @@ void worker_thread()
             break;
 
         }
-        case OP_PLAYER_MOVE_NOTIFY:
+        case OP_PLAYER_MOVE_NOTIFY: {
             g_clients[key].lua_lock.lock();
             lua_getglobal(g_clients[key].L, "event_player_move");
             lua_pushnumber(g_clients[key].L, over_ex->object_id);
             lua_pcall(g_clients[key].L, 1, 1, 0);
             g_clients[key].lua_lock.unlock();
             delete over_ex;
-            break;
+            break; 
+        }
+        case OP_PLAYER_MOVE_1s: {
+            g_clients[key].move_1s_time = false;
+            delete over_ex;
+        }
         }
     }
 }
