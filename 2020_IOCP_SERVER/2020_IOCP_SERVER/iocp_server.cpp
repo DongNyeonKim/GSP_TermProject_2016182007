@@ -47,6 +47,9 @@ struct client_info {
     mutex c_lock;
     char name[MAX_ID_LEN];
     short x, y;
+    short hp;
+    short level;
+    short exp;
 
     mutex lua_lock;
     lua_State* L;

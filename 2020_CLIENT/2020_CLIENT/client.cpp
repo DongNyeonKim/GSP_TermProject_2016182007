@@ -42,6 +42,9 @@ private:
 public:
 	int m_x, m_y;
 	char name[MAX_ID_LEN];
+	short hp=0;
+	short level=0;
+	short exp;
 	OBJECT(sf::Texture& t, int x, int y, int x2, int y2) {
 		m_showing = false;
 		m_sprite.setTexture(t);
@@ -137,6 +140,7 @@ void client_finish()
 {
 	delete board;
 	delete pieces;
+	delete obtacle;
 }
 
 void ProcessPacket(char* ptr)
@@ -288,24 +292,50 @@ void client_main()
 		}
 
 	}
+	//장애물 출력
 	for (int i = 0; i < NUM_OBTACLE; ++i) {
-
 		obtacle_tile.a_move(TILE_WIDTH * (ob_positions[i].x- g_left_x) + 7, TILE_WIDTH * (ob_positions[i].y- g_top_y) + 7);
 		obtacle_tile.a_draw();
-
 	}
 
 
 	avatar.draw();
 	//	for (auto &pl : players) pl.draw();
 	for (auto& npc : npcs) npc.second.draw();
+
+	//플레이어 위치 표시
 	sf::Text text;
 	text.setFont(g_font);
 	char buf[100];
 	sprintf_s(buf, "(%d, %d)", avatar.m_x, avatar.m_y);
 	text.setString(buf);
+	text.setCharacterSize(40);
+	text.setStyle(sf::Text::Bold);
 	g_window->draw(text);
 
+	//플레이어 HP 표시
+	sf::Text player_hp;
+	player_hp.setFont(g_font);
+	char hp_buf[100];
+	sprintf_s(hp_buf, "HP: %d", avatar.hp);
+	player_hp.setString(hp_buf);
+	player_hp.setPosition(10, 50);
+	player_hp.setCharacterSize(50);
+	player_hp.setFillColor(sf::Color::Red);
+	player_hp.setStyle(sf::Text::Bold);
+	g_window->draw(player_hp);
+
+	//플레이어 레벨 표시
+	sf::Text player_level;
+	player_level.setFont(g_font);
+	char level_buf[100];
+	sprintf_s(level_buf, "Level: %d", avatar.level);
+	player_level.setString(level_buf);
+	player_level.setPosition(10,100);
+	player_level.setCharacterSize(50);
+	player_level.setFillColor(sf::Color::Yellow);
+	player_level.setStyle(sf::Text::Bold);
+	g_window->draw(player_level);
 }
 
 void send_packet(void* packet)
