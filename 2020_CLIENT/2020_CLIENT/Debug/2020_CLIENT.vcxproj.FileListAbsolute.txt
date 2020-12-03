@@ -1,3 +1,4 @@
 C:\Users\DongNyeonKim\Desktop\3학년 2학기\게임 서버 프로그래밍\GSP\IOCP_실습자료\NPC\2020_CLIENT\2020_CLIENT\Debug\2020_CLIENT.vcxproj.CopyComplete
 C:\Users\DongNyeonKim\Desktop\3학년 2학기\게임 서버 프로그래밍\GSP\GSP 6차 과제\2020_CLIENT\2020_CLIENT\Debug\2020_CLIENT.vcxproj.CopyComplete
 C:\Users\DongNyeonKim\Desktop\3학년 2학기\게임 서버 프로그래밍\GSP\GSP 7차 과제\GSP_7주차과제_2016182007_김동년\2020_CLIENT\2020_CLIENT\Debug\2020_CLIENT.vcxproj.CopyComplete
+C:\Users\DongNyeonKim\Desktop\3학년 2학기\게임 서버 프로그래밍\GSP_TermProject_2016182007_김동년\2020_CLIENT\2020_CLIENT\Debug\2020_CLIENT.vcxproj.CopyComplete

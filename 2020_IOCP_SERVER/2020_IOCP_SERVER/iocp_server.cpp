@@ -270,10 +270,18 @@ void process_move(int id, char dir)
     default: cout << "Unknown Direction in CS_MOVE packet.\n";
         while (true);
     }
+    bool collision_obtacle = false;
+    for (int i = 0; i < NUM_OBTACLE; i++)
+    {
+        if (ob_positions[i].x == x && ob_positions[i].y == y)
+            collision_obtacle = true;
+    }
     unordered_set <int> old_viewlist = g_clients[id].view_list;
 
-    g_clients[id].x = x;
-    g_clients[id].y = y;
+    if (!collision_obtacle) {
+        g_clients[id].x = x;
+        g_clients[id].y = y;
+    }
 
     if (0 <= g_clients[id].x && g_clients[id].x <= 400 && 0 <= g_clients[id].y && g_clients[id].y <= 400) {
         if (std::find(sec1.begin(), sec1.end(), id) != sec1.end() == false) {
@@ -1453,8 +1461,18 @@ void random_move_npc(int id)
     case 3: if (y < (WORLD_HEIGHT - 1)) y++; break;
     }
 
-    g_clients[id].x = x;
-    g_clients[id].y = y;
+    bool collision_obtacle = false;
+    for (int i = 0; i < NUM_OBTACLE; i++)
+    {
+        if (ob_positions[i].x == x && ob_positions[i].y == y)
+            collision_obtacle = true;
+    }
+
+    if (!collision_obtacle) {
+        g_clients[id].x = x;
+        g_clients[id].y = y;
+    }
+
 
     if (0 <= g_clients[id].x && g_clients[id].x <= 400 && 0 <= g_clients[id].y && g_clients[id].y <= 400) {
         if (std::find(sec1.begin(), sec1.end(), id) != sec1.end() == false) {

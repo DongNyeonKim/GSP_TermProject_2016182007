@@ -105,22 +105,30 @@ unordered_map <int, OBJECT> npcs;
 
 OBJECT white_tile;
 OBJECT black_tile;
+//장애물
+OBJECT obtacle_tile;
 
 sf::Texture* board;
 sf::Texture* pieces;
+//장애물
+sf::Texture* obtacle;
+
 
 void client_initialize()
 {
 	board = new sf::Texture;
 	pieces = new sf::Texture;
+	obtacle = new sf::Texture;
 	if (false == g_font.loadFromFile("cour.ttf")) {
 		cout << "Font Loading Error!\n";
 		while (true);
 	}
 	board->loadFromFile("chessmap.bmp");
 	pieces->loadFromFile("chess2.png");
+	obtacle->loadFromFile("obtimage.bmp");
 	white_tile = OBJECT{ *board, 5, 5, TILE_WIDTH, TILE_WIDTH };
 	black_tile = OBJECT{ *board, 69, 5, TILE_WIDTH, TILE_WIDTH };
+	obtacle_tile = OBJECT{ *obtacle, 5, 5, TILE_WIDTH, TILE_WIDTH };
 	avatar = OBJECT{ *pieces, 128, 0, 64, 64 };
 	avatar.move(4, 4);
 }
@@ -275,9 +283,19 @@ void client_main()
 			{
 				black_tile.a_move(TILE_WIDTH * i + 7, TILE_WIDTH * j + 7);
 				black_tile.a_draw();
+
 			}
 		}
+
 	}
+	for (int i = 0; i < NUM_OBTACLE; ++i) {
+
+		obtacle_tile.a_move(TILE_WIDTH * (ob_positions[i].x- g_left_x) + 7, TILE_WIDTH * (ob_positions[i].y- g_top_y) + 7);
+		obtacle_tile.a_draw();
+
+	}
+
+
 	avatar.draw();
 	//	for (auto &pl : players) pl.draw();
 	for (auto& npc : npcs) npc.second.draw();

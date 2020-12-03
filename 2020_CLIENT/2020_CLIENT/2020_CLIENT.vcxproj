@@ -144,6 +144,7 @@
   <ItemGroup>
     <Image Include="chess2.png" />
     <Image Include="chessmap.bmp" />
+    <Image Include="obtimage.bmp" />
   </ItemGroup>
   <ItemGroup>
     <Font Include="cour.ttf" />
