@@ -1612,8 +1612,8 @@ void random_move_npc(int id)
 
 
 
-    g_clients[id].x = x;
-    g_clients[id].y = y;
+    //g_clients[id].x = x;
+    //g_clients[id].y = y;
 
     //厘局拱 面倒贸府
     bool collision_obtacle = false;
