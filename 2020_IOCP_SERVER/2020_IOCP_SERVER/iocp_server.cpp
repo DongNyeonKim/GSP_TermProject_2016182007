@@ -7,7 +7,8 @@
 #include <unordered_set>
 #include <chrono>
 #include <queue>
-
+#include "Default.h"
+#include "Astar.h"
 //시야에서 사라지는 경우 activation을 끊어야함 cas? 더이상 큐에 입력받지 못하도록
 //timer가 아니라 work thread 에서 실행되도록 행야함 post큐
 extern "C" {
@@ -47,6 +48,7 @@ struct OVER_EX {
 struct client_info {
     mutex c_lock;
     char name[MAX_ID_LEN];
+    short first_x, first_y;
     short x, y;
     short hp;
     short level;
@@ -67,7 +69,10 @@ struct client_info {
     mutex vl;
     unordered_set <int> view_list;
 
+    //NPC
     int move_time;
+    bool fixed;
+    bool attack_type;
 };
 
 mutex id_lock;
@@ -195,6 +200,29 @@ bool is_near(int p1, int p2)
     return dist <= VIEW_LIMIT * VIEW_LIMIT;
 }
 
+bool is_near_dis(int p1, int p2, int dis)
+{
+    int dist = (g_clients[p1].x - g_clients[p2].x) * (g_clients[p1].x - g_clients[p2].x);
+    dist += (g_clients[p1].y - g_clients[p2].y) * (g_clients[p1].y - g_clients[p2].y);
+
+    return dist <= dis * dis;
+}
+
+bool is_in_moverange(short x, short y, short n_x, short n_y, int dis)
+{
+    int dist = (x - n_x) * (x - n_x);
+    dist += (y - n_y) * (y - n_y);
+
+    return dist <= dis * dis;
+}
+
+int get_moverange(short x, short y, short n_x, short n_y)
+{
+    int dist = (x - n_x) * (x - n_x);
+    dist += (y - n_y) * (y - n_y);
+
+    return dist;
+}
 void send_packet(int id, void* p)
 {
     unsigned char* packet = reinterpret_cast<unsigned char*>(p);
@@ -714,7 +742,7 @@ void process_move(int id, char dir)
     }
 
     g_clients[id].move_1s_time = true;
-    add_timer(id, OP_PLAYER_MOVE_1s, system_clock::now() + 1s);
+    add_timer(id, OP_PLAYER_MOVE_1s, system_clock::now() + 1ms);
 
 }
 
@@ -1333,7 +1361,10 @@ void worker_thread()
         key = static_cast<int>(iocp_key);
         //cout << "Completion Detected" << endl;
         if (FALSE == ret) {
-            error_display("GQCS Error : ", WSAGetLastError());
+            //오류난 플레이어 disconnect
+            disconnect_client(key);
+            error_display("hGQCS Error : ", WSAGetLastError());
+
         }
 
         OVER_EX* over_ex = reinterpret_cast<OVER_EX*>(lpover);
@@ -1427,6 +1458,8 @@ void initialize_NPC()
     {
         g_clients[i].x = rand() % WORLD_WIDTH;
         g_clients[i].y = rand() % WORLD_HEIGHT;
+        g_clients[i].first_x = g_clients[i].x;
+        g_clients[i].first_y = g_clients[i].y;
         if (0 <= g_clients[i].x && g_clients[i].x <= 400 && 0 <= g_clients[i].y && g_clients[i].y <= 400)
             sec1.push_back(i);
         else if (401 <= g_clients[i].x && g_clients[i].x <= 800 && 0 <= g_clients[i].y && g_clients[i].y <= 400)
@@ -1438,6 +1471,20 @@ void initialize_NPC()
         else
             cout << "Sector Add Error" << endl;
 
+        //NPC 고정, 이동여부 초기화
+        if (i % 2 == 0)
+        {
+            g_clients[i].fixed = true;
+        }
+        else
+            g_clients[i].fixed = false;
+
+        if (i < (MAX_USER + NUM_NPC) / 2) {
+            g_clients[i].attack_type = true;
+        }
+        else
+            g_clients[i].attack_type = false;
+        g_clients[i].attack_type = true;
 
         char npc_name[50];
         sprintf_s(npc_name, "N%d", i);
@@ -1462,9 +1509,27 @@ void initialize_NPC()
     cout << "NPC initialize finished." << endl;
 }
 
+//void chase_player(int id, short &x, short &y)
+//{
+//    Astar::Coordinate A(0, 0);
+//    Astar::Coordinate B(0, 4);
+//
+//    Astar astar(A, B);
+//
+//    x = astar.GetPos(2).x;
+//    y = astar.GetPos(2).y;
+//}
+
+bool same_position(short x, short y, short x1, short y1) {
+    if (x == x1 && y == y1)
+        return true;
+    else
+        return false;
+}
+
 void random_move_npc(int id)
 {
-
+    if (g_clients[id].fixed == true) return;
     //플레이어 뷰리스트를 갱신해줘야 함 NPC가 들어갈 때와 나갈 떄
     unordered_set <int> old_viewlist;
     for (int i = 0; i < MAX_USER; ++i) {
@@ -1475,14 +1540,82 @@ void random_move_npc(int id)
     int  x = g_clients[id].x;
     int  y = g_clients[id].y;
 
-    switch (rand() % 4)
+
+
+    //움직이는 NPC 범위 내 이동
+    if (!is_in_moverange(x, y, g_clients[id].first_x, g_clients[id].first_y, 5))
     {
-    case 0: if (x > 0) x--; break;
-    case 1: if (x < (WORLD_WIDTH - 1)) x++; break;
-    case 2: if (y > 0) y--; break;
-    case 3: if (y < (WORLD_HEIGHT - 1)) y++; break;
+        while (true) {
+            switch (rand() % 4)
+            {
+                case 0: if (x > 0) x--; break;
+                case 1: if (x < (WORLD_WIDTH - 1)) x++; break;
+                case 2: if (y > 0) y--; break;
+                case 3: if (y < (WORLD_HEIGHT - 1)) y++; break;
+            }
+            if (is_in_moverange(x, y, g_clients[id].first_x, g_clients[id].first_y, 5)) break;
+            x = g_clients[id].x;
+            y = g_clients[id].y;
+        }
+    }
+    else
+    {
+        switch (rand() % 4)
+        {
+        case 0: if (x > 0) x--; break;
+        case 1: if (x < (WORLD_WIDTH - 1)) x++; break;
+        case 2: if (y > 0) y--; break;
+        case 3: if (y < (WORLD_HEIGHT - 1)) y++; break;
+        }
     }
 
+    if (g_clients[id].attack_type == true) {
+        int chase_player_id = -1;
+        for (int i = 0; i < MAX_USER; ++i) {
+            if (id == i) continue;
+            if (false == g_clients[i].in_use) continue;
+            if (true == is_near_dis(id, i, 3)) {
+                chase_player_id = i;
+                //cout << "ID"<<i << endl;
+                break;
+            }
+        }
+        if (chase_player_id != -1) {
+            if (g_clients[chase_player_id].in_use == true) {
+                if (!same_position(g_clients[id].x, g_clients[id].y, g_clients[chase_player_id].x, g_clients[chase_player_id].y))
+                {
+                    //cout << g_clients[id].x << "    " << g_clients[id].y << endl;
+                    //cout << g_clients[chase_player_id].x << "   " << g_clients[chase_player_id].y << endl;
+                    Astar::Coordinate A(g_clients[id].x, g_clients[id].y);
+                    Astar::Coordinate B(g_clients[chase_player_id].x, g_clients[chase_player_id].y);
+
+                    Astar astar(A, B);
+                    //cout << astar.GetPos(2).x << "   " << astar.GetPos(2).y << endl;
+                    int x1, y1;
+                    x1 = astar.GetPos(2).x;
+                    y1 = astar.GetPos(2).y;
+                    if (is_in_moverange(x1, y1, g_clients[id].first_x, g_clients[id].first_y, 5))
+                    {
+                        x = x1;
+                        y = y1;
+                    }
+                    //cout << "x: " << x << "y: " << y << endl;
+                }
+                else {
+                    //cout << "same posi" << endl;
+                    x = g_clients[id].x;
+                    y = g_clients[id].y;
+                }
+            }
+        }
+    }
+
+
+
+    g_clients[id].x = x;
+    g_clients[id].y = y;
+
+    //장애물 충돌처리
     bool collision_obtacle = false;
     for (int i = 0; i < NUM_OBTACLE; i++)
     {
@@ -1528,7 +1661,6 @@ void random_move_npc(int id)
         cout << "Sector Move Error" << endl;
 
     unordered_set <int> new_viewlist;
-
     for (int i = 0; i < MAX_USER; ++i) {
        if (id == i) continue;
        if (false == g_clients[i].in_use) continue;
