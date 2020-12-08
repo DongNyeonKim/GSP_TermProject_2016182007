@@ -4,6 +4,8 @@
 #include <iostream>
 #include <unordered_map>
 #include <chrono>
+#include <queue>
+#include <string>
 using namespace std;
 using namespace chrono;
 
@@ -29,6 +31,9 @@ int g_myid;
 sf::RenderWindow* g_window;
 sf::Font g_font;
 
+
+queue<string> chatqueue;
+
 class OBJECT {
 private:
 	bool m_showing;
@@ -38,13 +43,15 @@ private:
 	high_resolution_clock::time_point m_time_out;
 	sf::Text m_text;
 	sf::Text m_name;
+	sf::Text m_level;
+	sf::Text m_hp;
 
 public:
 	int m_x, m_y;
 	char name[MAX_ID_LEN];
 	short hp=0;
 	short level=0;
-	short exp;
+	short exp=0;
 	OBJECT(sf::Texture& t, int x, int y, int x2, int y2) {
 		m_showing = false;
 		m_sprite.setTexture(t);
@@ -84,6 +91,11 @@ public:
 		g_window->draw(m_sprite);
 		m_name.setPosition(rx - 10, ry - 10);
 		g_window->draw(m_name);
+		m_level.setPosition(rx - 10, ry - 30);
+		g_window->draw(m_level);
+		m_hp.setPosition(rx - 10, ry - 50);
+		g_window->draw(m_hp);
+
 		if (high_resolution_clock::now() < m_time_out) {
 			m_text.setPosition(rx - 10, ry - 50);
 			m_text.setCharacterSize(50);
@@ -95,6 +107,22 @@ public:
 		m_name.setString(str);
 		m_name.setFillColor(sf::Color(255, 255, 0));
 		m_name.setStyle(sf::Text::Bold);
+	}
+	void set_level(int level) {
+		m_level.setFont(g_font);
+		char hp_buf[100];
+		sprintf_s(hp_buf, "LEVEL:%d", level);
+		m_level.setString(hp_buf);
+		m_level.setFillColor(sf::Color(255, 0, 255));
+		m_level.setStyle(sf::Text::Bold);
+	}
+	void set_hp(int hp) {
+		m_hp.setFont(g_font);
+		char hp_buf[100];
+		sprintf_s(hp_buf, "HP:%d", hp);
+		m_hp.setString(hp_buf);
+		m_hp.setFillColor(sf::Color(255, 0, 0));
+		m_hp.setStyle(sf::Text::Bold);
 	}
 	void add_chat(char chat[]) {
 		m_text.setFont(g_font);
@@ -175,8 +203,11 @@ void ProcessPacket(char* ptr)
 				npcs[id] = OBJECT{ *pieces, 64, 0, 64, 64 };
 			else
 				npcs[id] = OBJECT{ *pieces, 0, 0, 64, 64 };
+
 			strcpy_s(npcs[id].name, my_packet->name);
 			npcs[id].set_name(my_packet->name);
+			npcs[id].set_hp(my_packet->hp);
+			npcs[id].set_level(my_packet->level);
 			npcs[id].move(my_packet->x, my_packet->y);
 			npcs[id].show();
 		}
@@ -219,6 +250,27 @@ void ProcessPacket(char* ptr)
 
 	}
 	break;
+	case SC_PACKET_ATTACK:
+	{
+		sc_packet_attack* my_packet = reinterpret_cast<sc_packet_attack*>(ptr);
+
+		npcs[my_packet->npc_id].set_hp(my_packet->npc_hp);
+		avatar.hp = my_packet->player_hp;
+		avatar.level = my_packet->player_level;
+		avatar.exp = my_packet->player_exp;
+
+		string temp = "Player Attack Monster";
+		temp += to_string(my_packet->npc_id);
+		temp += " To Damage ";
+		temp += to_string(my_packet->damage);
+		temp += ".";
+
+		chatqueue.push(temp);
+
+		if (chatqueue.size() > 5)
+			chatqueue.pop();
+	}
+	break;
 	default:
 		printf("Unknown PACKET type [%d]\n", ptr[1]);
 	}
@@ -247,6 +299,37 @@ void process_data(char* net_buf, size_t io_byte)
 			io_byte = 0;
 		}
 	}
+}
+
+void showChat()
+{
+	queue<string> temp;
+
+
+	for (int i = 0; i < 5; i++)
+	{
+		if (!chatqueue.empty()) {
+
+			sf::Text Chat;
+			Chat.setFont(g_font);
+			char hp_buf[100];
+
+			strcpy_s(hp_buf, chatqueue.front().c_str());
+			Chat.setString(hp_buf);
+			Chat.setPosition(10, 950 + i*50);
+			Chat.setCharacterSize(40);
+			Chat.setFillColor(sf::Color::Cyan);
+			Chat.setStyle(sf::Text::Bold);
+			g_window->draw(Chat);
+
+			string cd;
+			cd = chatqueue.front();
+			chatqueue.pop();
+			temp.push(cd);
+		}
+		else break;
+	}
+	chatqueue = temp;
 }
 
 void client_main()
@@ -336,6 +419,21 @@ void client_main()
 	player_level.setFillColor(sf::Color::Yellow);
 	player_level.setStyle(sf::Text::Bold);
 	g_window->draw(player_level);
+
+	//플레이어 Exp 표시
+	sf::Text player_exp;
+	player_exp.setFont(g_font);
+	char exp_buf[100];
+	sprintf_s(exp_buf, "Exp: %d", avatar.exp);
+	player_exp.setString(exp_buf);
+	player_exp.setPosition(10, 150);
+	player_exp.setCharacterSize(50);
+	player_exp.setFillColor(sf::Color::Magenta);
+	player_exp.setStyle(sf::Text::Bold);
+	g_window->draw(player_exp);
+
+	//채팅표시
+	showChat();
 }
 
 void send_packet(void* packet)
@@ -352,6 +450,14 @@ void send_move_packet(unsigned char dir)
 	m_packet.type = CS_MOVE;
 	m_packet.size = sizeof(m_packet);
 	m_packet.direction = dir;
+	send_packet(&m_packet);
+}
+
+void send_attack_packet()
+{
+	cs_packet_attack m_packet;
+	m_packet.type = CS_ATTACK;
+	m_packet.size = sizeof(m_packet);
 	send_packet(&m_packet);
 }
 
@@ -407,6 +513,9 @@ int main()
 					break;
 				case sf::Keyboard::Down:
 					send_move_packet(MV_DOWN);
+					break;
+				case sf::Keyboard::Space:
+					send_attack_packet();
 					break;
 				case sf::Keyboard::Escape:
 					window.close();

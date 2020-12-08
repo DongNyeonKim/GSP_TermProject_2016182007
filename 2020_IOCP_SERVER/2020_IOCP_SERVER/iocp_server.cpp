@@ -34,6 +34,8 @@ constexpr char OP_MODE_ACCEPT = 2;
 constexpr char OP_RANDOM_MOVE = 3;
 constexpr char OP_PLAYER_MOVE_NOTIFY = 4;
 constexpr char OP_PLAYER_MOVE_1s = 5;
+constexpr char OP_PLAYER_ATTACK_1s = 6;
+constexpr char OP_NPC_RESPAWN = 7;
 
 constexpr int  KEY_SERVER = 1000000;
 
@@ -55,6 +57,7 @@ struct client_info {
     short exp;
 
     bool move_1s_time;
+    bool attack_1s_time;
 
     mutex lua_lock;
     lua_State* L;
@@ -69,8 +72,10 @@ struct client_info {
     mutex vl;
     unordered_set <int> view_list;
 
-    //NPC
     int move_time;
+
+    //NPC
+    bool live = false;
     bool fixed;
     bool attack_type;
 };
@@ -141,11 +146,22 @@ void time_worker()
                     //add_timer(ev.obj_id, OP_RANDOM_MOVE, system_clock::now() + 1s);
                     break;
                 }
+                else if (ev.event_id == OP_NPC_RESPAWN) {
+                    OVER_EX* send_over = new OVER_EX();
+                    send_over->op_mode = ev.event_id;
+                    PostQueuedCompletionStatus(h_iocp, 1, ev.obj_id, &send_over->wsa_over);
+                    break;
+                }
                 else if (ev.event_id == OP_PLAYER_MOVE_1s) {
                     OVER_EX* send_over = new OVER_EX();
                     send_over->op_mode = ev.event_id;
                     PostQueuedCompletionStatus(h_iocp, 1, ev.obj_id, &send_over->wsa_over);
-
+                    break;
+                }
+                else if (ev.event_id == OP_PLAYER_ATTACK_1s) {
+                    OVER_EX* send_over = new OVER_EX();
+                    send_over->op_mode = ev.event_id;
+                    PostQueuedCompletionStatus(h_iocp, 1, ev.obj_id, &send_over->wsa_over);
                     break;
                 }
             }
@@ -223,6 +239,7 @@ int get_moverange(short x, short y, short n_x, short n_y)
 
     return dist;
 }
+
 void send_packet(int id, void* p)
 {
     unsigned char* packet = reinterpret_cast<unsigned char*>(p);
@@ -275,6 +292,23 @@ void send_move_packet(int to_client, int id)
     send_packet(to_client, &p);
 }
 
+void send_attack_packet(int player_id, int npc_id)
+{
+    sc_packet_attack p;
+    p.size = sizeof(p);
+    p.type = SC_PACKET_ATTACK;
+    p.player_id = player_id;
+    p.player_hp = g_clients[player_id].hp;
+    p.player_level = g_clients[player_id].level;
+    p.player_exp = g_clients[player_id].exp;
+    p.damage = 50;
+    p.get_exp = 100;
+    p.npc_id = npc_id;
+    p.npc_hp = g_clients[npc_id].hp;
+
+    send_packet(player_id, &p);
+}
+
 void send_enter_packet(int to_client, int new_id)
 {
     sc_packet_enter p;
@@ -283,6 +317,8 @@ void send_enter_packet(int to_client, int new_id)
     p.type = SC_PACKET_ENTER;
     p.x = g_clients[new_id].x;
     p.y = g_clients[new_id].y;
+    p.hp = g_clients[new_id].hp;
+    p.level = g_clients[new_id].level;
     g_clients[new_id].c_lock.lock();
     strcpy_s(p.name, g_clients[new_id].name);
     g_clients[new_id].c_lock.unlock();
@@ -299,6 +335,150 @@ void send_leave_packet(int to_client, int new_id)
     send_packet(to_client, &p);
 }
 
+bool is_in_attack_range(int Player_id, int NPC_ID)
+{
+    if (g_clients[Player_id].x == g_clients[NPC_ID].x) {
+        if (g_clients[Player_id].y == g_clients[NPC_ID].y) {
+            return true;
+        }
+    }
+    if (g_clients[Player_id].x - 1 == g_clients[NPC_ID].x) {
+        if (g_clients[Player_id].y == g_clients[NPC_ID].y) {
+            return true;
+        }
+    }
+    if (g_clients[Player_id].x + 1 == g_clients[NPC_ID].x) {
+        if (g_clients[Player_id].y == g_clients[NPC_ID].y) {
+            return true;
+        }
+    }
+    if (g_clients[Player_id].y - 1 == g_clients[NPC_ID].y) {
+         if (g_clients[Player_id].x == g_clients[NPC_ID].x) {
+            return true;
+        }
+    }
+    if (g_clients[Player_id].y + 1 == g_clients[NPC_ID].y) {
+        if (g_clients[Player_id].x == g_clients[NPC_ID].x) {
+            return true;
+        }
+    }
+    else
+        return false;
+}
+
+void set_player_level(int id)
+{
+    if (0 <= g_clients[id].exp && g_clients[id].exp < 100)
+        g_clients[id].level = 0;
+    else if (100 <= g_clients[id].exp && g_clients[id].exp < 200)
+        g_clients[id].level = 1;
+    else if (200 <= g_clients[id].exp && g_clients[id].exp < 400)
+        g_clients[id].level = 2;
+    else if (400 <= g_clients[id].exp && g_clients[id].exp < 800)
+        g_clients[id].level = 3;
+    else if (800 <= g_clients[id].exp && g_clients[id].exp < 1200)
+        g_clients[id].level = 4;
+    else if(1200 <= g_clients[id].exp)
+        g_clients[id].level = 5;
+    else 
+        g_clients[id].level = 0;
+
+}
+
+void respawn_npc(int npc_id)
+{
+    g_clients[npc_id].x = g_clients[npc_id].first_x;
+    g_clients[npc_id].y = g_clients[npc_id].first_y;
+    g_clients[npc_id].hp = 1000;
+    g_clients[npc_id].live = true;
+
+    //섹터링
+    if (0 <= g_clients[npc_id].x && g_clients[npc_id].x <= 400 && 0 <= g_clients[npc_id].y && g_clients[npc_id].y <= 400)
+        sec1.push_back(npc_id);
+    else if (401 <= g_clients[npc_id].x && g_clients[npc_id].x <= 800 && 0 <= g_clients[npc_id].y && g_clients[npc_id].y <= 400)
+        sec2.push_back(npc_id);
+    else if (0 <= g_clients[npc_id].x && g_clients[npc_id].x <= 400 && 401 <= g_clients[npc_id].y && g_clients[npc_id].y <= 800)
+        sec3.push_back(npc_id);
+    else if (401 <= g_clients[npc_id].x && g_clients[npc_id].x <= 800 && 401 <= g_clients[npc_id].y && g_clients[npc_id].y <= 800)
+        sec4.push_back(npc_id);
+    else
+        cout << "Sector Add Error" << endl;
+
+    for (int i = 0; i < MAX_USER; ++i) {
+        if (false == g_clients[i].in_use) continue;
+        if (true == is_near(npc_id, i)) {
+            g_clients[i].vl.lock();
+            g_clients[i].view_list.insert(npc_id);
+            g_clients[i].vl.unlock();
+            g_clients[npc_id].vl.lock();
+            g_clients[npc_id].view_list.insert(i);
+            g_clients[npc_id].vl.unlock();
+
+            send_enter_packet(i, npc_id);
+            //WakeUp을 하면서 is_active를 True로 활성화
+            wake_up_npc(npc_id);
+        }
+    }
+}
+
+void npc_die(int npc_id)
+{
+    g_clients[npc_id].is_active = false;
+    g_clients[npc_id].live = false;
+
+    sec1.erase(std::remove(sec1.begin(), sec1.end(), npc_id), sec1.end());
+    sec2.erase(std::remove(sec2.begin(), sec2.end(), npc_id), sec2.end());
+    sec3.erase(std::remove(sec3.begin(), sec3.end(), npc_id), sec3.end());
+    sec4.erase(std::remove(sec4.begin(), sec4.end(), npc_id), sec4.end());
+    for (int i = 0; i < MAX_USER; ++i) {
+        if (true == g_clients[i].in_use) {
+            if (false == is_near(i, npc_id)) continue;
+            //NPC가 죽을 경우 해당 NPC를 보고 있는 모든 플레이어 에게 leave 패킷을 전송 하고 
+            //뷰리스트에서 삭제
+            send_leave_packet(i, npc_id);
+            g_clients[i].vl.lock();
+            g_clients[i].view_list.erase(npc_id);
+            g_clients[i].vl.unlock();
+        }
+        
+    }
+
+    add_timer(npc_id, OP_NPC_RESPAWN, system_clock::now() + 10s);
+}
+
+void process_attack(int id)
+{
+    if (true == g_clients[id].attack_1s_time) return;
+
+    cout << id << "Attack" << endl;
+    //send_move_packet(id, id);
+
+    
+    for (auto& npc : g_clients[id].view_list) {
+        if (true == is_in_attack_range(id, npc)) {
+            //해당 NPC HP 감소
+            g_clients[npc].hp -= 200;
+            //NPC가 죽으면
+            if (g_clients[npc].hp <= 0) {
+                g_clients[npc].hp = 0;
+                g_clients[id].exp += 500;
+
+                //EXP 업데이트 후 레벨 업데이트
+                set_player_level(id);
+
+                //플레이어의 뷰리스트에서 삭제하고 플레이어에게 leave 패킷 전송
+                //NPC 죽음 처리
+                npc_die(npc);
+            }
+            send_attack_packet(id, npc);
+        }
+    }
+
+
+    g_clients[id].attack_1s_time = true;
+    add_timer(id, OP_PLAYER_ATTACK_1s, system_clock::now() + 1s);
+}
+
 void process_move(int id, char dir)
 {
     if (true == g_clients[id].move_1s_time) return;
@@ -312,6 +492,8 @@ void process_move(int id, char dir)
     default: cout << "Unknown Direction in CS_MOVE packet.\n";
         while (true);
     }
+
+    //장애물과 충돌처리
     bool collision_obtacle = false;
     for (int i = 0; i < NUM_OBTACLE; i++)
     {
@@ -365,8 +547,10 @@ void process_move(int id, char dir)
             if (is_npc(i))
             {
                 if (true == is_near(id, i)) {
-                    new_viewlist.insert(i);
-                    wake_up_npc(i);
+                    if (g_clients[i].live) {
+                        new_viewlist.insert(i);
+                        wake_up_npc(i);
+                    }
                 }
                 else
                     g_clients[i].is_active = false;
@@ -386,8 +570,10 @@ void process_move(int id, char dir)
             if (is_npc(i))
             {
                 if (true == is_near(id, i)) {
-                    new_viewlist.insert(i);
-                    wake_up_npc(i);
+                    if (g_clients[i].live) {
+                        new_viewlist.insert(i);
+                        wake_up_npc(i);
+                    }
                 }
                 else
                     g_clients[i].is_active = false;
@@ -404,8 +590,10 @@ void process_move(int id, char dir)
             if (is_npc(i))
             {
                 if (true == is_near(id, i)) {
-                    new_viewlist.insert(i);
-                    wake_up_npc(i);
+                    if (g_clients[i].live) {
+                        new_viewlist.insert(i);
+                        wake_up_npc(i);
+                    }
                 }
                 else
                     g_clients[i].is_active = false;
@@ -425,8 +613,10 @@ void process_move(int id, char dir)
             if (is_npc(i))
             {
                 if (true == is_near(id, i)) {
-                    new_viewlist.insert(i);
-                    wake_up_npc(i);
+                    if (g_clients[i].live) {
+                        new_viewlist.insert(i);
+                        wake_up_npc(i);
+                    }
                 }
                 else
                     g_clients[i].is_active = false;
@@ -446,8 +636,10 @@ void process_move(int id, char dir)
             if (is_npc(i))
             {
                 if (true == is_near(id, i)) {
-                    new_viewlist.insert(i);
-                    wake_up_npc(i);
+                    if (g_clients[i].live) {
+                        new_viewlist.insert(i);
+                        wake_up_npc(i);
+                    }
                 }
                 else
                     g_clients[i].is_active = false;
@@ -464,8 +656,10 @@ void process_move(int id, char dir)
             if (is_npc(i))
             {
                 if (true == is_near(id, i)) {
-                    new_viewlist.insert(i);
-                    wake_up_npc(i);
+                    if (g_clients[i].live) {
+                        new_viewlist.insert(i);
+                        wake_up_npc(i);
+                    }
                 }
                 else
                     g_clients[i].is_active = false;
@@ -485,8 +679,10 @@ void process_move(int id, char dir)
             if (is_npc(i))
             {
                 if (true == is_near(id, i)) {
-                    new_viewlist.insert(i);
-                    wake_up_npc(i);
+                    if (g_clients[i].live) {
+                        new_viewlist.insert(i);
+                        wake_up_npc(i);
+                    }
                 }
                 else
                     g_clients[i].is_active = false;
@@ -503,8 +699,10 @@ void process_move(int id, char dir)
             if (is_npc(i))
             {
                 if (true == is_near(id, i)) {
-                    new_viewlist.insert(i);
-                    wake_up_npc(i);
+                    if (g_clients[i].live) {
+                        new_viewlist.insert(i);
+                        wake_up_npc(i);
+                    }
                 }
                 else
                     g_clients[i].is_active = false;
@@ -521,8 +719,10 @@ void process_move(int id, char dir)
             if (is_npc(i))
             {
                 if (true == is_near(id, i)) {
-                    new_viewlist.insert(i);
-                    wake_up_npc(i);
+                    if (g_clients[i].live) {
+                        new_viewlist.insert(i);
+                        wake_up_npc(i);
+                    }
                 }
                 else
                     g_clients[i].is_active = false;
@@ -539,8 +739,10 @@ void process_move(int id, char dir)
             if (is_npc(i))
             {
                 if (true == is_near(id, i)) {
-                    new_viewlist.insert(i);
-                    wake_up_npc(i);
+                    if (g_clients[i].live) {
+                        new_viewlist.insert(i);
+                        wake_up_npc(i);
+                    }
                 }
                 else
                     g_clients[i].is_active = false;
@@ -560,8 +762,10 @@ void process_move(int id, char dir)
             if (is_npc(i))
             {
                 if (true == is_near(id, i)) {
-                    new_viewlist.insert(i);
-                    wake_up_npc(i);
+                    if (g_clients[i].live) {
+                        new_viewlist.insert(i);
+                        wake_up_npc(i);
+                    }
                 }
                 else
                     g_clients[i].is_active = false;
@@ -578,8 +782,10 @@ void process_move(int id, char dir)
             if (is_npc(i))
             {
                 if (true == is_near(id, i)) {
-                    new_viewlist.insert(i);
-                    wake_up_npc(i);
+                    if (g_clients[i].live) {
+                        new_viewlist.insert(i);
+                        wake_up_npc(i);
+                    }
                 }
                 else
                     g_clients[i].is_active = false;
@@ -599,8 +805,10 @@ void process_move(int id, char dir)
             if (is_npc(i))
             {
                 if (true == is_near(id, i)) {
-                    new_viewlist.insert(i);
-                    wake_up_npc(i);
+                    if (g_clients[i].live) {
+                        new_viewlist.insert(i);
+                        wake_up_npc(i);
+                    }
                 }
                 else
                     g_clients[i].is_active = false;
@@ -620,8 +828,10 @@ void process_move(int id, char dir)
             if (is_npc(i))
             {
                 if (true == is_near(id, i)) {
-                    new_viewlist.insert(i);
-                    wake_up_npc(i);
+                    if (g_clients[i].live) {
+                        new_viewlist.insert(i);
+                        wake_up_npc(i);
+                    }
                 }
                 else
                     g_clients[i].is_active = false;
@@ -638,8 +848,10 @@ void process_move(int id, char dir)
             if (is_npc(i))
             {
                 if (true == is_near(id, i)) {
-                    new_viewlist.insert(i);
-                    wake_up_npc(i);
+                    if (g_clients[i].live) {
+                        new_viewlist.insert(i);
+                        wake_up_npc(i);
+                    }
                 }
                 else
                     g_clients[i].is_active = false;
@@ -659,8 +871,10 @@ void process_move(int id, char dir)
             if (is_npc(i))
             {
                 if (true == is_near(id, i)) {
-                    new_viewlist.insert(i);
-                    wake_up_npc(i);
+                    if (g_clients[i].live) {
+                        new_viewlist.insert(i);
+                        wake_up_npc(i);
+                    }
                 }
                 else
                     g_clients[i].is_active = false;
@@ -1217,6 +1431,11 @@ void process_packet(int id)
         process_move(id, p->direction);
         break;
     }
+    case CS_ATTACK: {
+        cs_packet_attack* p = reinterpret_cast<cs_packet_attack*>(g_clients[id].m_packet_start);
+        process_attack(id);
+        break;
+    }
     default: cout << "Unknown Packet type [" << p_type << "] from Client [" << id << "]\n";
         while (true);
     }
@@ -1288,6 +1507,11 @@ void add_new_client(SOCKET ns)
 
         g_clients[i].x = rand() % WORLD_WIDTH;
         g_clients[i].y = rand() % WORLD_HEIGHT;
+        g_clients[i].exp = 0;
+        g_clients[i].hp = 5000;
+        g_clients[i].level = 0;
+        g_clients[i].first_x = g_clients[i].x;
+        g_clients[i].first_y = g_clients[i].y;
         //섹터추가
         if (0 <= g_clients[i].x && g_clients[i].x <= 400 && 0 <= g_clients[i].y && g_clients[i].y <= 400)
             sec1.push_back(i);
@@ -1403,6 +1627,11 @@ void worker_thread()
             break;
 
         }
+        case OP_NPC_RESPAWN: {
+            respawn_npc(key);
+            delete over_ex;
+            break;
+        }
         case OP_PLAYER_MOVE_NOTIFY: {
             g_clients[key].lua_lock.lock();
             lua_getglobal(g_clients[key].L, "event_player_move");
@@ -1415,6 +1644,12 @@ void worker_thread()
         case OP_PLAYER_MOVE_1s: {
             g_clients[key].move_1s_time = false;
             delete over_ex;
+            break;
+        }
+        case OP_PLAYER_ATTACK_1s: {
+            g_clients[key].attack_1s_time = false;
+            delete over_ex;
+            break;
         }
         }
     }
@@ -1449,7 +1684,6 @@ int API_SendMessage(lua_State* L)
     send_chat_packet(user_id, my_id, mess);
     return 0;
 }
-
 
 void initialize_NPC()
 {
@@ -1490,6 +1724,9 @@ void initialize_NPC()
         sprintf_s(npc_name, "N%d", i);
         strcpy_s(g_clients[i].name, npc_name);
         g_clients[i].is_active = false;
+        g_clients[i].hp = 1000;
+        g_clients[i].level = 0;
+        g_clients[i].live = true;
 
         lua_State* L = g_clients[i].L = luaL_newstate();
         luaL_openlibs(L);
@@ -1529,7 +1766,11 @@ bool same_position(short x, short y, short x1, short y1) {
 
 void random_move_npc(int id)
 {
+
+    if (g_clients[id].live == false) return;
+    //고정 캐릭터 일 경우 move 안함
     if (g_clients[id].fixed == true) return;
+
     //플레이어 뷰리스트를 갱신해줘야 함 NPC가 들어갈 때와 나갈 떄
     unordered_set <int> old_viewlist;
     for (int i = 0; i < MAX_USER; ++i) {
@@ -1611,9 +1852,6 @@ void random_move_npc(int id)
     }
 
 
-
-    //g_clients[id].x = x;
-    //g_clients[id].y = y;
 
     //장애물 충돌처리
     bool collision_obtacle = false;

@@ -7,7 +7,7 @@ constexpr int MAX_USER = 10000;
 constexpr int WORLD_WIDTH = 800;
 constexpr int WORLD_HEIGHT = 800;
 constexpr int MAX_STR_LEN = 100;
-constexpr int VIEW_LIMIT = 5;
+constexpr int VIEW_LIMIT = 10;
 
 constexpr int NUM_NPC =10000;
 constexpr int NUM_OBTACLE = 2000;
@@ -19,9 +19,12 @@ constexpr char SC_PACKET_MOVE = 1;
 constexpr char SC_PACKET_ENTER = 2;
 constexpr char SC_PACKET_LEAVE = 3;
 constexpr char SC_PACKET_CHAT = 4;
+constexpr char SC_PACKET_ATTACK = 5;
 
 constexpr char CS_LOGIN = 0;
 constexpr char CS_MOVE = 1;
+constexpr char CS_ATTACK = 2;
+
 
 struct sc_packet_login_ok {
 	char size;
@@ -41,6 +44,20 @@ struct sc_packet_move {
 	int move_time;
 };
 
+struct sc_packet_attack {
+	char size;
+	char type;
+	int player_id;
+	short player_hp;
+	short player_level;
+	short player_exp;
+	short damage;
+	short get_exp;
+	int npc_id;
+	short npc_hp;
+
+};
+
 struct sc_packet_enter {
 	char size;
 	char type;
@@ -48,6 +65,7 @@ struct sc_packet_enter {
 	char name[MAX_ID_LEN];
 	char o_type;
 	short x, y;
+	short level, hp;
 };
 
 struct sc_packet_leave {
@@ -79,6 +97,12 @@ struct cs_packet_move {
 	char  type;
 	char  direction;
 	int	  move_time;
+};
+
+struct cs_packet_attack {
+	char  size;
+	char  type;
+	bool attack;
 };
 
 #pragma pack (pop)

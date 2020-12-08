@@ -166,6 +166,7 @@ void ProcessPacket(int ci, unsigned char packet[])
 	}
 	break;
 	case SC_PACKET_CHAT: break;
+	case SC_PACKET_ATTACK: break;
 	default: MessageBox(hWnd, L"Unknown Packet Type", L"ERROR", 0);
 		while (true);
 	}
