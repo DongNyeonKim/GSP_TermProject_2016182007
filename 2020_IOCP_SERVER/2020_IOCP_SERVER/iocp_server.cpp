@@ -449,9 +449,9 @@ void npc_die(int npc_id)
             //NPC가 죽을 경우 해당 NPC를 보고 있는 모든 플레이어 에게 leave 패킷을 전송 하고 
             //뷰리스트에서 삭제
             send_leave_packet(i, npc_id);
-            g_clients[i].vl.lock();
-            g_clients[i].view_list.erase(npc_id);
-            g_clients[i].vl.unlock();
+            //g_clients[i].vl.lock();
+            //g_clients[i].view_list.erase(npc_id);
+            //g_clients[i].vl.unlock();
         }
         
     }
@@ -499,8 +499,8 @@ void update_player_exp(int id, int npc) {
 void process_attack(int id)
 {
     if (true == g_clients[id].attack_1s_time) return;
-    
-    for (auto& npc : g_clients[id].view_list) {
+    for (const int npc : g_clients[id].view_list) {
+
         if (true == is_in_attack_range(id, npc)) {
             //해당 NPC HP 감소
             g_clients[npc].hp -= PLAYER_ATTACK_DAMAGE;
@@ -524,11 +524,14 @@ void process_attack(int id)
                 npc_die(npc);
                 //플레이어의 State 변화와 어떤 몬스터 죽였는지 알려줌
                 send_change_state_packet(id, id, npc);
+
+                //g_clients[id].vl.lock();
+                //g_clients[id].view_list.erase(npc);
+                //g_clients[id].vl.unlock();
             }
 
         }
     }
-
 
     g_clients[id].attack_1s_time = true;
     add_timer(id, OP_PLAYER_ATTACK_1s, system_clock::now() + 1s);

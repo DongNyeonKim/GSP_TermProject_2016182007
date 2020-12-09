@@ -24,15 +24,15 @@ constexpr char SC_PACKET_LOGIN_FAIL = 5;
 constexpr char SC_PACKET_STAT_CHANGE = 6;
 constexpr char SC_PACKET_ATTACK = 7;
 
-constexpr char CS_LOGIN = 0;
-constexpr char CS_MOVE = 1;
-constexpr char CS_ATTACK = 2;
+constexpr char CS_LOGIN = 10;
+constexpr char CS_MOVE = 11;
+constexpr char CS_ATTACK = 12;
 
 //아직 추가 안함
-constexpr char CS_CHAT = 3;
-constexpr char CS_LOGOUT = 4;
+constexpr char CS_CHAT = 13;
+constexpr char CS_LOGOUT = 14;
 //?
-constexpr char CS_TELEORT = 5;
+constexpr char CS_TELEORT = 15;
 
 const short PLAYER_ATTACK_DAMAGE = 50;
 const short MONSTER_ATTACK_DAMAGE = 10;
