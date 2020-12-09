@@ -36,6 +36,7 @@ constexpr char OP_PLAYER_MOVE_NOTIFY = 4;
 constexpr char OP_PLAYER_MOVE_1s = 5;
 constexpr char OP_PLAYER_ATTACK_1s = 6;
 constexpr char OP_NPC_RESPAWN = 7;
+constexpr char OP_NPC_ATTACK_1s = 8;
 
 constexpr int  KEY_SERVER = 1000000;
 
@@ -142,9 +143,6 @@ void time_worker()
                     OVER_EX* send_over = new OVER_EX();
                     send_over->op_mode = ev.event_id;
                     PostQueuedCompletionStatus(h_iocp, 1, ev.obj_id, &send_over->wsa_over);
-
-                    //random_move_npc(ev.obj_id);
-                    //add_timer(ev.obj_id, OP_RANDOM_MOVE, system_clock::now() + 1s);
                     break;
                 }
                 else if (ev.event_id == OP_NPC_RESPAWN) {
@@ -160,6 +158,12 @@ void time_worker()
                     break;
                 }
                 else if (ev.event_id == OP_PLAYER_ATTACK_1s) {
+                    OVER_EX* send_over = new OVER_EX();
+                    send_over->op_mode = ev.event_id;
+                    PostQueuedCompletionStatus(h_iocp, 1, ev.obj_id, &send_over->wsa_over);
+                    break;
+                }
+                else if (ev.event_id == OP_NPC_ATTACK_1s) {
                     OVER_EX* send_over = new OVER_EX();
                     send_over->op_mode = ev.event_id;
                     PostQueuedCompletionStatus(h_iocp, 1, ev.obj_id, &send_over->wsa_over);
@@ -459,10 +463,21 @@ void npc_attack(int npc_id, int player_id)
 {
     if (true == g_clients[npc_id].attack_1s_time) return;
 
+    if (is_in_attack_range(npc_id, player_id))
+    {
+        g_clients[player_id].hp -= MONSTER_ATTACK_DAMAGE;
+
+        send_change_state_packet(player_id, player_id, npc_id);
+
+        //플레이어가 죽으면
+
+    }
     //노티파이랑 랜덤 무브 참고해서 만들고
     //에드 타이머는 플레이어가 가까이 있으면 가고 없으면 제끼라웃
-    g_clients[npc_id].attack_1s_time = true;
-    add_timer(npc_id, OP_PLAYER_ATTACK_1s, system_clock::now() + 1s);
+    if (is_in_attack_range(npc_id, player_id)) {
+        g_clients[npc_id].attack_1s_time = true;
+        add_timer(npc_id, OP_NPC_ATTACK_1s, system_clock::now() + 1s);
+    }
 
 }
 
@@ -1656,10 +1671,8 @@ void worker_thread()
         case OP_RANDOM_MOVE:
         {
             random_move_npc(key);
-
             delete over_ex;
             break;
-
         }
         case OP_NPC_RESPAWN: {
             respawn_npc(key);
@@ -1681,6 +1694,11 @@ void worker_thread()
             break;
         }
         case OP_PLAYER_ATTACK_1s: {
+            g_clients[key].attack_1s_time = false;
+            delete over_ex;
+            break;
+        }
+        case OP_NPC_ATTACK_1s: {
             g_clients[key].attack_1s_time = false;
             delete over_ex;
             break;
@@ -1808,7 +1826,6 @@ void initialize_NPC()
     }
     cout << "NPC initialize finished." << endl;
 }
-
 
 bool same_position(short x, short y, short x1, short y1) {
     if (x == x1 && y == y1)
