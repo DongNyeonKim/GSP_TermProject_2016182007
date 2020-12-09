@@ -144,6 +144,10 @@ sf::Texture* pieces;
 //장애물
 sf::Texture* obtacle;
 
+bool is_npc(int p1)
+{
+	return p1 >= MAX_USER;
+}
 
 void client_initialize()
 {
@@ -250,23 +254,40 @@ void ProcessPacket(char* ptr)
 
 	}
 	break;
-	case SC_PACKET_ATTACK:
+	case SC_PACKET_STAT_CHANGE:
 	{
-		sc_packet_attack* my_packet = reinterpret_cast<sc_packet_attack*>(ptr);
+		sc_packet_stat_chage* my_packet = reinterpret_cast<sc_packet_stat_chage*>(ptr);
 
-		npcs[my_packet->npc_id].set_hp(my_packet->npc_hp);
-		avatar.hp = my_packet->player_hp;
-		avatar.level = my_packet->player_level;
-		avatar.exp = my_packet->player_exp;
+		if (my_packet->id == g_myid)
+		{
+			avatar.hp = my_packet->hp;
+			avatar.level = my_packet->level;
+			
 
-		string temp = "Player Attack Monster";
-		temp += to_string(my_packet->npc_id);
-		temp += " To Damage ";
-		temp += to_string(my_packet->damage);
-		temp += ".";
+			string temp = "Defeated The Monster ";
+			temp += my_packet->npc_name;
+			temp += " AND Gained ";
+			temp += to_string((my_packet->exp)- (avatar.exp));
+			temp += "Exp.";
 
-		chatqueue.push(temp);
+			avatar.exp = my_packet->exp;
 
+			chatqueue.push(temp);
+		}
+		else if (is_npc(my_packet->id)) {
+			npcs[my_packet->id].set_hp(my_packet->hp);
+			string temp = "Warrior Attack Monster ";
+			temp += my_packet->npc_name;
+			temp += " Inclicting ";
+			temp += to_string(PLAYER_ATTACK_DAMAGE);
+			temp += "Damage.";
+
+			chatqueue.push(temp);
+
+		}
+
+
+		//큐가 5개 이상일 경우 POP
 		if (chatqueue.size() > 5)
 			chatqueue.pop();
 	}
@@ -318,7 +339,10 @@ void showChat()
 			Chat.setString(hp_buf);
 			Chat.setPosition(10, 950 + i*50);
 			Chat.setCharacterSize(40);
-			Chat.setFillColor(sf::Color::Cyan);
+			if(i%2==0)
+				Chat.setFillColor(sf::Color::White);
+			else
+				Chat.setFillColor(sf::Color::Magenta);
 			Chat.setStyle(sf::Text::Bold);
 			g_window->draw(Chat);
 
@@ -461,6 +485,14 @@ void send_attack_packet()
 	send_packet(&m_packet);
 }
 
+void send_logout_packet()
+{
+	cs_packet_logout m_packet;
+	m_packet.type = CS_LOGOUT;
+	m_packet.size = sizeof(m_packet);
+	send_packet(&m_packet);
+}
+
 
 int main()
 {
@@ -528,6 +560,9 @@ int main()
 		client_main();
 		window.display();
 	}
+
+	cout << "클라이언트 종료" << endl;
+	send_logout_packet();
 	client_finish();
 
 	return 0;

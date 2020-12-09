@@ -7,8 +7,9 @@ constexpr int MAX_USER = 10000;
 constexpr int WORLD_WIDTH = 800;
 constexpr int WORLD_HEIGHT = 800;
 constexpr int MAX_STR_LEN = 100;
-constexpr int VIEW_LIMIT = 10;
+constexpr int VIEW_LIMIT = 7;
 
+//수정해줘야함
 constexpr int NUM_NPC =10000;
 constexpr int NUM_OBTACLE = 2000;
 
@@ -19,12 +20,22 @@ constexpr char SC_PACKET_MOVE = 1;
 constexpr char SC_PACKET_ENTER = 2;
 constexpr char SC_PACKET_LEAVE = 3;
 constexpr char SC_PACKET_CHAT = 4;
-constexpr char SC_PACKET_ATTACK = 5;
+constexpr char SC_PACKET_LOGIN_FAIL = 5;
+constexpr char SC_PACKET_STAT_CHANGE = 6;
+constexpr char SC_PACKET_ATTACK = 7;
 
 constexpr char CS_LOGIN = 0;
 constexpr char CS_MOVE = 1;
 constexpr char CS_ATTACK = 2;
 
+//아직 추가 안함
+constexpr char CS_CHAT = 3;
+constexpr char CS_LOGOUT = 4;
+//?
+constexpr char CS_TELEORT = 5;
+
+const short PLAYER_ATTACK_DAMAGE = 50;
+const short MONSTER_ATTACK_DAMAGE = 10;
 
 struct sc_packet_login_ok {
 	char size;
@@ -81,6 +92,23 @@ struct sc_packet_chat {
 	char  message[MAX_STR_LEN];		//짧은 문자를 보낼 때 비효율적임 문자 사이즈를 봐서 사이즈를 바꿔서 보내야 함, 실제 게임서버에서는 써야함
 };
 
+struct sc_packet_login_fail {
+	char  size;
+	char  type;
+	int	  id;
+	char  message[MAX_STR_LEN];
+};
+
+struct sc_packet_stat_chage {
+	char size;
+	char type;
+	int  id;
+	short hp;
+	short level;
+	short   exp;
+	char npc_name[MAX_ID_LEN];
+};
+
 struct cs_packet_login {
 	char  size;
 	char  type;
@@ -102,7 +130,17 @@ struct cs_packet_move {
 struct cs_packet_attack {
 	char  size;
 	char  type;
-	bool attack;
+};
+
+struct cs_packet_chat {
+	char	size;
+	char	type;
+	char	message[MAX_STR_LEN];
+};
+
+struct cs_packet_logout {
+	char	size;
+	char	type;
 };
 
 #pragma pack (pop)

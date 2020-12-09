@@ -109,11 +109,13 @@ struct event_type {
 priority_queue<event_type> timer_queue;
 mutex timer_l;
 
+void random_move_npc(int id);
+void disconnect_client(int id);
+
 bool CAS(volatile bool* addr, bool expected, bool new_val)
 {
     return atomic_compare_exchange_strong(reinterpret_cast<volatile atomic_bool*>(addr), &expected, new_val);
 }
-
 
 void add_timer(int obj_id, int ev_type, system_clock::time_point t)
 {
@@ -123,7 +125,6 @@ void add_timer(int obj_id, int ev_type, system_clock::time_point t)
     timer_l.unlock();
 }
 
-void random_move_npc(int id);
 
 void time_worker()
 {
@@ -280,6 +281,16 @@ void send_login_ok(int id)
     send_packet(id, &p);
 }
 
+void send_login_fail_packet(int to_client, int id, char* mess)
+{
+    sc_packet_login_fail p;
+    p.id = id;
+    p.size = sizeof(p);
+    p.type = SC_PACKET_LOGIN_FAIL;
+    strcpy_s(p.message, mess);
+    send_packet(to_client, &p);
+}
+
 void send_move_packet(int to_client, int id)
 {
     sc_packet_move p;
@@ -292,19 +303,16 @@ void send_move_packet(int to_client, int id)
     send_packet(to_client, &p);
 }
 
-void send_attack_packet(int player_id, int npc_id)
+void send_change_state_packet(int player_id, int id, int npc)
 {
-    sc_packet_attack p;
+    sc_packet_stat_chage p;
     p.size = sizeof(p);
-    p.type = SC_PACKET_ATTACK;
-    p.player_id = player_id;
-    p.player_hp = g_clients[player_id].hp;
-    p.player_level = g_clients[player_id].level;
-    p.player_exp = g_clients[player_id].exp;
-    p.damage = 50;
-    p.get_exp = 100;
-    p.npc_id = npc_id;
-    p.npc_hp = g_clients[npc_id].hp;
+    p.type = SC_PACKET_STAT_CHANGE;
+    p.id = id;
+    p.hp = g_clients[id].hp;
+    p.exp = g_clients[id].exp;
+    p.level = g_clients[id].level;
+    strcpy_s(p.npc_name, g_clients[id].name);
 
     send_packet(player_id, &p);
 }
@@ -426,6 +434,7 @@ void npc_die(int npc_id)
     g_clients[npc_id].is_active = false;
     g_clients[npc_id].live = false;
 
+    //해당 NPC 섹터에서 삭제
     sec1.erase(std::remove(sec1.begin(), sec1.end(), npc_id), sec1.end());
     sec2.erase(std::remove(sec2.begin(), sec2.end(), npc_id), sec2.end());
     sec3.erase(std::remove(sec3.begin(), sec3.end(), npc_id), sec3.end());
@@ -446,22 +455,51 @@ void npc_die(int npc_id)
     add_timer(npc_id, OP_NPC_RESPAWN, system_clock::now() + 10s);
 }
 
+void npc_attack(int npc_id, int player_id)
+{
+    if (true == g_clients[npc_id].attack_1s_time) return;
+
+    //노티파이랑 랜덤 무브 참고해서 만들고
+    //에드 타이머는 플레이어가 가까이 있으면 가고 없으면 제끼라웃
+    g_clients[npc_id].attack_1s_time = true;
+    add_timer(npc_id, OP_PLAYER_ATTACK_1s, system_clock::now() + 1s);
+
+}
+
+void update_player_exp(int id, int npc) {
+    short exp=0;
+    exp = g_clients[npc].level * 5;
+
+    if (g_clients[npc].attack_type == true) {
+        exp = exp * 2;
+    }
+    if (g_clients[npc].fixed == false)
+    {
+        exp = exp * 2;
+    }
+
+    g_clients[id].exp += exp;
+}
+
 void process_attack(int id)
 {
     if (true == g_clients[id].attack_1s_time) return;
-
-    cout << id << "Attack" << endl;
-    //send_move_packet(id, id);
-
     
     for (auto& npc : g_clients[id].view_list) {
         if (true == is_in_attack_range(id, npc)) {
             //해당 NPC HP 감소
-            g_clients[npc].hp -= 200;
+            g_clients[npc].hp -= PLAYER_ATTACK_DAMAGE;
+            
+            //플레이어에게 NPC 상태 변화 알림
+            send_change_state_packet(id, npc, npc);
+
+            //npc_attack(npc, id);
             //NPC가 죽으면
             if (g_clients[npc].hp <= 0) {
                 g_clients[npc].hp = 0;
-                g_clients[id].exp += 500;
+
+                //NPC 별로 exp 수정 필요
+                update_player_exp(id, npc);
 
                 //EXP 업데이트 후 레벨 업데이트
                 set_player_level(id);
@@ -469,8 +507,10 @@ void process_attack(int id)
                 //플레이어의 뷰리스트에서 삭제하고 플레이어에게 leave 패킷 전송
                 //NPC 죽음 처리
                 npc_die(npc);
+                //플레이어의 State 변화와 어떤 몬스터 죽였는지 알려줌
+                send_change_state_packet(id, id, npc);
             }
-            send_attack_packet(id, npc);
+
         }
     }
 
@@ -1436,6 +1476,11 @@ void process_packet(int id)
         process_attack(id);
         break;
     }
+    case CS_LOGOUT: {
+        cs_packet_logout* p = reinterpret_cast<cs_packet_logout*>(g_clients[id].m_packet_start);
+        disconnect_client(id);
+        break;
+    }
     default: cout << "Unknown Packet type [" << p_type << "] from Client [" << id << "]\n";
         while (true);
     }
@@ -1547,6 +1592,7 @@ void add_new_client(SOCKET ns)
 
 void disconnect_client(int id)
 {
+    cout << "Player:" << id << " Disconnect" << endl;
     for (int i = 0; i < MAX_USER; ++i) {
         if (true == g_clients[i].in_use)
             if (i != id) {
@@ -1610,18 +1656,6 @@ void worker_thread()
         case OP_RANDOM_MOVE:
         {
             random_move_npc(key);
-            //bool active = false;
-            //for (int i = 0; i < MAX_USER; ++i)
-            //{
-            //   if(true==is_near(key,i))
-            //      if (g_clients[i].in_use)
-            //      {
-            //          active = true;
-            //         break;
-            //      }
-            //}
-            //if (true == active) add_timer(key, OP_RANDOM_MOVE, system_clock::now() + 1s);
-            //else g_clients[key].is_active = false;
 
             delete over_ex;
             break;
@@ -1713,6 +1747,7 @@ void initialize_NPC()
         else
             g_clients[i].fixed = false;
 
+        //어그로 타입, 일반 타입 초기화
         if (i < (MAX_USER + NUM_NPC) / 2) {
             g_clients[i].attack_type = true;
         }
@@ -1724,9 +1759,37 @@ void initialize_NPC()
         sprintf_s(npc_name, "N%d", i);
         strcpy_s(g_clients[i].name, npc_name);
         g_clients[i].is_active = false;
-        g_clients[i].hp = 1000;
-        g_clients[i].level = 0;
         g_clients[i].live = true;
+
+        //레벨 랜덤 설정 후 레벨 별로 Hp 설정
+        switch (rand() % 5)
+        {
+            case 0:{
+                g_clients[i].hp = 50;
+                g_clients[i].level = 1;
+                break;
+            }
+            case 1: {
+                g_clients[i].hp = 100;
+                g_clients[i].level = 2;
+                break;
+            }
+            case 2: {
+                g_clients[i].hp = 150;
+                g_clients[i].level = 3;
+                break;
+            }
+            case 3: {
+                g_clients[i].hp = 200;
+                g_clients[i].level = 4;
+                break;
+            }
+            case 4: {
+                g_clients[i].hp = 250;
+                g_clients[i].level = 5;
+                break;
+            }
+        }
 
         lua_State* L = g_clients[i].L = luaL_newstate();
         luaL_openlibs(L);
@@ -1746,16 +1809,6 @@ void initialize_NPC()
     cout << "NPC initialize finished." << endl;
 }
 
-//void chase_player(int id, short &x, short &y)
-//{
-//    Astar::Coordinate A(0, 0);
-//    Astar::Coordinate B(0, 4);
-//
-//    Astar astar(A, B);
-//
-//    x = astar.GetPos(2).x;
-//    y = astar.GetPos(2).y;
-//}
 
 bool same_position(short x, short y, short x1, short y1) {
     if (x == x1 && y == y1)
@@ -1961,18 +2014,6 @@ void random_move_npc(int id)
     g_clients[id].lua_lock.unlock();
 }
 
-//void npc_ai_thread()
-//{
-//    while (true) {
-//        auto start_time = system_clock::now();
-//        for (int i = MAX_USER; i < MAX_USER + NUM_NPC; ++i)
-//            random_move_npc(i);
-//        auto end_time = system_clock::now();
-//        auto exec_time = end_time - start_time;
-//        cout << "AI exec time = " << duration_cast<seconds>(exec_time).count() << "s\n";
-//        this_thread::sleep_for(1s - (end_time - start_time));
-//    }
-//}
 
 int main()
 {
