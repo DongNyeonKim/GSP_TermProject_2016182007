@@ -280,14 +280,14 @@ void ProcessPacket(char* ptr)
 			}
 			else if (my_packet->hp > avatar.hp)
 			{
-				avatar.hp = my_packet->hp;
-				avatar.level = my_packet->level;
 
 				string temp = "Warrior recoverd ";
 				temp += to_string((my_packet->hp) - (avatar.hp));
 				temp += "Hp.";
 
 				avatar.exp = my_packet->exp;
+				avatar.hp = my_packet->hp;
+				avatar.level = my_packet->level;
 
 				chatqueue.push(temp);
 			}
