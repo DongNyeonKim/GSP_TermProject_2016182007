@@ -51,6 +51,7 @@ struct OVER_EX {
 
 struct client_info {
     mutex c_lock;
+    int id;
     char name[MAX_ID_LEN];
     short first_x, first_y;
     short x, y;
@@ -192,11 +193,6 @@ void time_worker()
 
 void wake_up_npc(int id)
 {
-    //if (false == g_clients[id].is_active) {
-    //    //g_clients[id].is_active = true; //CAS로 구현해서 이중 활성화를 막아야 한다.
-    //    if (CAS(&g_clients[id].is_active, false, true))
-    //        add_timer(id, OP_RANDOM_MOVE, system_clock::now() + 1s);
-    //}
     bool b = false;
     if (true == g_clients[id].is_active.compare_exchange_strong(b, true))
     {
@@ -459,8 +455,7 @@ void npc_die(int npc_id)
     for (int i = 0; i < MAX_USER; ++i) {
         if (true == g_clients[i].in_use) {
             if (false == is_near(i, npc_id)) continue;
-            //NPC가 죽을 경우 해당 NPC를 보고 있는 모든 플레이어 에게 leave 패킷을 전송 하고 
-            //뷰리스트에서 삭제
+            //NPC가 죽을 경우 해당 NPC를 보고 있는 모든 플레이어 에게 leave 패킷을 전송
             send_leave_packet(i, npc_id);
 
             //마지막에 원인 찾기
@@ -484,18 +479,462 @@ void recovery_player_hp(int player_id)
     //10프로 증가
     g_clients[player_id].hp += g_clients[player_id].hp / 10;
 
-    if (g_clients[player_id].hp > 5000)
-        g_clients[player_id].hp = 5000;
+    if (g_clients[player_id].hp > PLAYER_MAX_HP)
+        g_clients[player_id].hp = PLAYER_MAX_HP;
 
     send_change_state_packet(player_id, player_id, 0);
 
     //체력이 5000미만일 경우 재 호출
-    if (g_clients[player_id].hp < 5000) {
+    if (g_clients[player_id].hp < PLAYER_MAX_HP) {
         g_clients[player_id].hp_recov_5s_time = true;
         add_timer(player_id, OP_PLAYER_HP_RECOVERY_5s, system_clock::now() + 5000ms, 0);
     }
     else
         g_clients[player_id].recovery = false;
+
+}
+
+void player_die_and_respawn(int id)
+{
+    g_clients[id].view_list.clear();
+
+    g_clients[id].x = g_clients[id].first_x;
+    g_clients[id].y = g_clients[id].first_y;
+    g_clients[id].hp = PLAYER_MAX_HP;
+    g_clients[id].exp = g_clients[id].exp / 2;
+    set_player_level(id);
+
+    send_login_ok(id);
+    //주위에 존재하는 플레이어들을 알려줌 현재는 User만 알려줌 NPC도 알려줘야함
+    if (0 <= g_clients[id].x && g_clients[id].x <= 380 && 0 <= g_clients[id].y && g_clients[id].y <= 380)
+    {
+        for (int i : sec1) {
+            if (true == g_clients[i].in_use)
+                if (id != i) {
+                    if (false == is_near(i, id)) continue;
+                    if (0 == g_clients[i].view_list.count(id)) {
+                        g_clients[i].vl.lock();
+                        g_clients[i].view_list.insert(id);
+                        g_clients[i].vl.unlock();
+                        send_enter_packet(i, id);
+                    }
+                    if (0 == g_clients[id].view_list.count(i)) {
+                        g_clients[id].vl.lock();
+                        g_clients[id].view_list.insert(i);
+                        g_clients[id].vl.unlock();
+                        send_enter_packet(id, i);
+                    }
+                }
+            if (is_npc(i))
+            {
+                if (false == is_near(id, i)) continue;
+                g_clients[id].view_list.insert(i);
+                send_enter_packet(id, i);
+                wake_up_npc(i);
+            }
+        }
+    }
+    else if (381 <= g_clients[id].x && g_clients[id].x <= 419 && 0 <= g_clients[id].y && g_clients[id].y <= 380)
+    {
+        for (int i : sec1) {
+            if (true == g_clients[i].in_use)
+                if (id != i) {
+                    if (false == is_near(i, id)) continue;
+                    if (0 == g_clients[i].view_list.count(id)) {
+                        g_clients[i].vl.lock();
+                        g_clients[i].view_list.insert(id);
+                        g_clients[i].vl.unlock();
+                        send_enter_packet(i, id);
+                    }
+                    if (0 == g_clients[id].view_list.count(i)) {
+                        g_clients[id].vl.lock();
+                        g_clients[id].view_list.insert(i);
+                        g_clients[id].vl.unlock();
+                        send_enter_packet(id, i);
+                    }
+                }
+            if (is_npc(i))
+            {
+                if (false == is_near(id, i)) continue;
+                g_clients[id].view_list.insert(i);
+                send_enter_packet(id, i);
+                wake_up_npc(i);
+            }
+        }
+        for (int i : sec2) {
+            if (true == g_clients[i].in_use)
+                if (id != i) {
+                    if (false == is_near(i, id)) continue;
+                    if (0 == g_clients[i].view_list.count(id)) {
+                        g_clients[i].vl.lock();
+                        g_clients[i].view_list.insert(id);
+                        g_clients[i].vl.unlock();
+                        send_enter_packet(i, id);
+                    }
+                    if (0 == g_clients[id].view_list.count(i)) {
+                        g_clients[id].vl.lock();
+                        g_clients[id].view_list.insert(i);
+                        g_clients[id].vl.unlock();
+                        send_enter_packet(id, i);
+                    }
+                }
+            if (is_npc(i))
+            {
+                if (false == is_near(id, i)) continue;
+                g_clients[id].view_list.insert(i);
+                send_enter_packet(id, i);
+                wake_up_npc(i);
+            }
+        }
+    }
+    else if (420 <= g_clients[id].x && g_clients[id].x <= 800 && 0 <= g_clients[id].y && g_clients[id].y <= 380)
+    {
+        for (int i : sec2) {
+            if (true == g_clients[i].in_use)
+                if (id != i) {
+                    if (false == is_near(i, id)) continue;
+                    if (0 == g_clients[i].view_list.count(id)) {
+                        g_clients[i].vl.lock();
+                        g_clients[i].view_list.insert(id);
+                        g_clients[i].vl.unlock();
+                        send_enter_packet(i, id);
+                    }
+                    if (0 == g_clients[id].view_list.count(i)) {
+                        g_clients[id].vl.lock();
+                        g_clients[id].view_list.insert(i);
+                        g_clients[id].vl.unlock();
+                        send_enter_packet(id, i);
+                    }
+                }
+            if (is_npc(i))
+            {
+                if (false == is_near(id, i)) continue;
+                g_clients[id].view_list.insert(i);
+                send_enter_packet(id, i);
+                wake_up_npc(i);
+            }
+        }
+    }
+    else if (0 <= g_clients[id].x && g_clients[id].x <= 380 && 381 <= g_clients[id].y && g_clients[id].y <= 419)
+    {
+        for (int i : sec1) {
+            if (true == g_clients[i].in_use)
+                if (id != i) {
+                    if (false == is_near(i, id)) continue;
+                    if (0 == g_clients[i].view_list.count(id)) {
+                        g_clients[i].vl.lock();
+                        g_clients[i].view_list.insert(id);
+                        g_clients[i].vl.unlock();
+                        send_enter_packet(i, id);
+                    }
+                    if (0 == g_clients[id].view_list.count(i)) {
+                        g_clients[id].vl.lock();
+                        g_clients[id].view_list.insert(i);
+                        g_clients[id].vl.unlock();
+                        send_enter_packet(id, i);
+                    }
+                }
+            if (is_npc(i))
+            {
+                if (false == is_near(id, i)) continue;
+                g_clients[id].view_list.insert(i);
+                send_enter_packet(id, i);
+                wake_up_npc(i);
+            }
+        }
+        for (int i : sec3) {
+            if (true == g_clients[i].in_use)
+                if (id != i) {
+                    if (false == is_near(i, id)) continue;
+                    if (0 == g_clients[i].view_list.count(id)) {
+                        g_clients[i].vl.lock();
+                        g_clients[i].view_list.insert(id);
+                        g_clients[i].vl.unlock();
+                        send_enter_packet(i, id);
+                    }
+                    if (0 == g_clients[id].view_list.count(i)) {
+                        g_clients[id].vl.lock();
+                        g_clients[id].view_list.insert(i);
+                        g_clients[id].vl.unlock();
+                        send_enter_packet(id, i);
+                    }
+                }
+            if (is_npc(i))
+            {
+                if (false == is_near(id, i)) continue;
+                g_clients[id].view_list.insert(i);
+                send_enter_packet(id, i);
+                wake_up_npc(i);
+            }
+        }
+    }
+    else if (381 <= g_clients[id].x && g_clients[id].x <= 419 && 381 <= g_clients[id].y && g_clients[id].y <= 419)
+    {
+        for (int i : sec1) {
+            if (true == g_clients[i].in_use)
+                if (id != i) {
+                    if (false == is_near(i, id)) continue;
+                    if (0 == g_clients[i].view_list.count(id)) {
+                        g_clients[i].vl.lock();
+                        g_clients[i].view_list.insert(id);
+                        g_clients[i].vl.unlock();
+                        send_enter_packet(i, id);
+                    }
+                    if (0 == g_clients[id].view_list.count(i)) {
+                        g_clients[id].vl.lock();
+                        g_clients[id].view_list.insert(i);
+                        g_clients[id].vl.unlock();
+                        send_enter_packet(id, i);
+                    }
+                }
+            if (is_npc(i))
+            {
+                if (false == is_near(id, i)) continue;
+                g_clients[id].view_list.insert(i);
+                send_enter_packet(id, i);
+                wake_up_npc(i);
+            }
+        }
+        for (int i : sec2) {
+            if (true == g_clients[i].in_use)
+                if (id != i) {
+                    if (false == is_near(i, id)) continue;
+                    if (0 == g_clients[i].view_list.count(id)) {
+                        g_clients[i].vl.lock();
+                        g_clients[i].view_list.insert(id);
+                        g_clients[i].vl.unlock();
+                        send_enter_packet(i, id);
+                    }
+                    if (0 == g_clients[id].view_list.count(i)) {
+                        g_clients[id].vl.lock();
+                        g_clients[id].view_list.insert(i);
+                        g_clients[id].vl.unlock();
+                        send_enter_packet(id, i);
+                    }
+                }
+            if (is_npc(i))
+            {
+                if (false == is_near(id, i)) continue;
+                g_clients[id].view_list.insert(i);
+                send_enter_packet(id, i);
+                wake_up_npc(i);
+            }
+        }
+        for (int i : sec3) {
+            if (true == g_clients[i].in_use)
+                if (id != i) {
+                    if (false == is_near(i, id)) continue;
+                    if (0 == g_clients[i].view_list.count(id)) {
+                        g_clients[i].vl.lock();
+                        g_clients[i].view_list.insert(id);
+                        g_clients[i].vl.unlock();
+                        send_enter_packet(i, id);
+                    }
+                    if (0 == g_clients[id].view_list.count(i)) {
+                        g_clients[id].vl.lock();
+                        g_clients[id].view_list.insert(i);
+                        g_clients[id].vl.unlock();
+                        send_enter_packet(id, i);
+                    }
+                }
+            if (is_npc(i))
+            {
+                if (false == is_near(id, i)) continue;
+                g_clients[id].view_list.insert(i);
+                send_enter_packet(id, i);
+                wake_up_npc(i);
+            }
+        }
+        for (int i : sec4) {
+            if (true == g_clients[i].in_use)
+                if (id != i) {
+                    if (false == is_near(i, id)) continue;
+                    if (0 == g_clients[i].view_list.count(id)) {
+                        g_clients[i].vl.lock();
+                        g_clients[i].view_list.insert(id);
+                        g_clients[i].vl.unlock();
+                        send_enter_packet(i, id);
+                    }
+                    if (0 == g_clients[id].view_list.count(i)) {
+                        g_clients[id].vl.lock();
+                        g_clients[id].view_list.insert(i);
+                        g_clients[id].vl.unlock();
+                        send_enter_packet(id, i);
+                    }
+                }
+            if (is_npc(i))
+            {
+                if (false == is_near(id, i)) continue;
+                g_clients[id].view_list.insert(i);
+                send_enter_packet(id, i);
+                wake_up_npc(i);
+            }
+        }
+    }
+    else if (420 <= g_clients[id].x && g_clients[id].x <= 800 && 381 <= g_clients[id].y && g_clients[id].y <= 419)
+    {
+        for (int i : sec2) {
+            if (true == g_clients[i].in_use)
+                if (id != i) {
+                    if (false == is_near(i, id)) continue;
+                    if (0 == g_clients[i].view_list.count(id)) {
+                        g_clients[i].vl.lock();
+                        g_clients[i].view_list.insert(id);
+                        g_clients[i].vl.unlock();
+                        send_enter_packet(i, id);
+                    }
+                    if (0 == g_clients[id].view_list.count(i)) {
+                        g_clients[id].vl.lock();
+                        g_clients[id].view_list.insert(i);
+                        g_clients[id].vl.unlock();
+                        send_enter_packet(id, i);
+                    }
+                }
+            if (is_npc(i))
+            {
+                if (false == is_near(id, i)) continue;
+                g_clients[id].view_list.insert(i);
+                send_enter_packet(id, i);
+                wake_up_npc(i);
+            }
+        }
+        for (int i : sec4) {
+            if (true == g_clients[i].in_use)
+                if (id != i) {
+                    if (false == is_near(i, id)) continue;
+                    if (0 == g_clients[i].view_list.count(id)) {
+                        g_clients[i].vl.lock();
+                        g_clients[i].view_list.insert(id);
+                        g_clients[i].vl.unlock();
+                        send_enter_packet(i, id);
+                    }
+                    if (0 == g_clients[id].view_list.count(i)) {
+                        g_clients[id].vl.lock();
+                        g_clients[id].view_list.insert(i);
+                        g_clients[id].vl.unlock();
+                        send_enter_packet(id, i);
+                    }
+                }
+            if (is_npc(i))
+            {
+                if (false == is_near(id, i)) continue;
+                g_clients[id].view_list.insert(i);
+                send_enter_packet(id, i);
+                wake_up_npc(i);
+            }
+        }
+    }
+    else if (0 <= g_clients[id].x && g_clients[id].x <= 380 && 420 <= g_clients[id].y && g_clients[id].y <= 800)
+    {
+        for (int i : sec3) {
+            if (true == g_clients[i].in_use)
+                if (id != i) {
+                    if (false == is_near(i, id)) continue;
+                    if (0 == g_clients[i].view_list.count(id)) {
+                        g_clients[i].vl.lock();
+                        g_clients[i].view_list.insert(id);
+                        g_clients[i].vl.unlock();
+                        send_enter_packet(i, id);
+                    }
+                    if (0 == g_clients[id].view_list.count(i)) {
+                        g_clients[id].vl.lock();
+                        g_clients[id].view_list.insert(i);
+                        g_clients[id].vl.unlock();
+                        send_enter_packet(id, i);
+                    }
+                }
+            if (is_npc(i))
+            {
+                if (false == is_near(id, i)) continue;
+                g_clients[id].view_list.insert(i);
+                send_enter_packet(id, i);
+                wake_up_npc(i);
+            }
+        }
+    }
+    else if (381 <= g_clients[id].x && g_clients[id].x <= 419 && 420 <= g_clients[id].y && g_clients[id].y <= 800)
+    {
+        for (int i : sec3) {
+            if (true == g_clients[i].in_use)
+                if (id != i) {
+                    if (false == is_near(i, id)) continue;
+                    if (0 == g_clients[i].view_list.count(id)) {
+                        g_clients[i].vl.lock();
+                        g_clients[i].view_list.insert(id);
+                        g_clients[i].vl.unlock();
+                        send_enter_packet(i, id);
+                    }
+                    if (0 == g_clients[id].view_list.count(i)) {
+                        g_clients[id].vl.lock();
+                        g_clients[id].view_list.insert(i);
+                        g_clients[id].vl.unlock();
+                        send_enter_packet(id, i);
+                    }
+                }
+            if (is_npc(i))
+            {
+                if (false == is_near(id, i)) continue;
+                g_clients[id].view_list.insert(i);
+                send_enter_packet(id, i);
+                wake_up_npc(i);
+            }
+        }
+        for (int i : sec4) {
+            if (true == g_clients[i].in_use)
+                if (id != i) {
+                    if (false == is_near(i, id)) continue;
+                    if (0 == g_clients[i].view_list.count(id)) {
+                        g_clients[i].vl.lock();
+                        g_clients[i].view_list.insert(id);
+                        g_clients[i].vl.unlock();
+                        send_enter_packet(i, id);
+                    }
+                    if (0 == g_clients[id].view_list.count(i)) {
+                        g_clients[id].vl.lock();
+                        g_clients[id].view_list.insert(i);
+                        g_clients[id].vl.unlock();
+                        send_enter_packet(id, i);
+                    }
+                }
+            if (is_npc(i))
+            {
+                if (false == is_near(id, i)) continue;
+                g_clients[id].view_list.insert(i);
+                send_enter_packet(id, i);
+                wake_up_npc(i);
+            }
+        }
+    }
+    else if (420 <= g_clients[id].x && g_clients[id].x <= 800 && 420 <= g_clients[id].y && g_clients[id].y <= 800)
+    {
+        for (int i : sec4) {
+            if (true == g_clients[i].in_use)
+                if (id != i) {
+                    if (false == is_near(i, id)) continue;
+                    if (0 == g_clients[i].view_list.count(id)) {
+                        g_clients[i].vl.lock();
+                        g_clients[i].view_list.insert(id);
+                        g_clients[i].vl.unlock();
+                        send_enter_packet(i, id);
+                    }
+                    if (0 == g_clients[id].view_list.count(i)) {
+                        g_clients[id].vl.lock();
+                        g_clients[id].view_list.insert(i);
+                        g_clients[id].vl.unlock();
+                        send_enter_packet(id, i);
+                    }
+                }
+            if (is_npc(i))
+            {
+                if (false == is_near(id, i)) continue;
+                g_clients[id].view_list.insert(i);
+                send_enter_packet(id, i);
+                wake_up_npc(i);
+            }
+        }
+    }
+    else
+        cout << "Sector Get Error" << endl;
 
 }
 
@@ -513,16 +952,19 @@ void npc_attack(int npc_id, int player_id)
         send_change_state_packet(player_id, player_id, npc_id);
 
         //HP가 5000보다 적으면 피회복 시작
-        if (g_clients[player_id].hp < 5000)
+        if (g_clients[player_id].hp < PLAYER_MAX_HP)
         {
-            if (g_clients[player_id].recovery == false) {
-                g_clients[player_id].recovery = true;
-                g_clients[player_id].hp_recov_5s_time = true;
-                add_timer(player_id, OP_PLAYER_HP_RECOVERY_5s, system_clock::now() + 5000ms, 0);
-            }
+            //if (g_clients[player_id].recovery == false) {
+            //    g_clients[player_id].recovery = true;
+            //    g_clients[player_id].hp_recov_5s_time = true;
+            //    add_timer(player_id, OP_PLAYER_HP_RECOVERY_5s, system_clock::now() + 5000ms, 0);
+            //}
         }
         //플레이어가 죽으면 처리
         //?
+        if (g_clients[player_id].hp <= 0) {
+            player_die_and_respawn(player_id);
+        }
 
     }
     //노티파이랑 랜덤 무브 참고해서 만들고
@@ -531,8 +973,10 @@ void npc_attack(int npc_id, int player_id)
         g_clients[npc_id].attack_1s_time = true;
         add_timer(npc_id, OP_NPC_ATTACK_1s, system_clock::now() + 1000ms, player_id);
     }
-    else
+    else {
         g_clients[npc_id].attack = false;
+        wake_up_npc(npc_id);
+    }
 
 }
 
@@ -590,7 +1034,7 @@ void process_attack(int id)
     }
 
     g_clients[id].attack_1s_time = true;
-    add_timer(id, OP_PLAYER_ATTACK_1s, system_clock::now() + 1s, 0);
+    add_timer(id, OP_PLAYER_ATTACK_1s, system_clock::now() + 1000ms, 0);
 }
 
 void process_move(int id, char dir)
@@ -1084,7 +1528,24 @@ void process_packet(int id)
         g_clients[id].c_lock.lock();
         strcpy_s(g_clients[id].name, p->name);
         g_clients[id].c_lock.unlock();
-        send_login_ok(id);
+
+        //이미 접속한 아이디 인지 확인
+        bool find_use = false;
+        for (int i = 0; i < MAX_USER; i++) {
+            if (g_clients[i].id == p->id) {
+                cout << "here" << endl;
+                find_use = true;
+            }
+        }
+        if (find_use == true) {
+            send_login_fail_packet(id, id, (char*)"LOGIN FAIL : Another player is already logged in.");
+            disconnect_client(id);
+        }
+        else
+            send_login_ok(id);
+
+        g_clients[id].id = p->id;
+
         //주위에 존재하는 플레이어들을 알려줌 현재는 User만 알려줌 NPC도 알려줘야함
         if (0 <= g_clients[id].x && g_clients[id].x <= 380 && 0 <= g_clients[id].y && g_clients[id].y <= 380)
         {
@@ -1556,6 +2017,18 @@ void process_packet(int id)
         disconnect_client(id);
         break;
     }
+    case CS_CHAT: {
+        cs_packet_chat* p = reinterpret_cast<cs_packet_chat*>(g_clients[id].m_packet_start);
+        //상대 플레이어 에게
+        for (auto pl : g_clients[id].view_list)
+        {
+            if (!is_npc(pl))
+                send_chat_packet(pl, id, p->message);
+        }
+        //나에게
+        send_chat_packet(id, id, p->message);
+        break;
+    }
     default: cout << "Unknown Packet type [" << p_type << "] from Client [" << id << "]\n";
         while (true);
     }
@@ -1627,7 +2100,7 @@ void add_new_client(SOCKET ns)
 
         g_clients[i].x = rand() % WORLD_WIDTH;
         g_clients[i].y = rand() % WORLD_HEIGHT;
-        g_clients[i].hp = 5000;
+        g_clients[i].hp = PLAYER_MAX_HP;
         g_clients[i].level = 0;
         g_clients[i].exp = 0;
         g_clients[i].first_x = g_clients[i].x;
@@ -1643,6 +2116,7 @@ void add_new_client(SOCKET ns)
             sec4.push_back(i);
         else
             cout << "Sector Add Error" << endl;
+
         CreateIoCompletionPort(reinterpret_cast<HANDLE>(ns), h_iocp, i, 0);
         DWORD flags = 0;
         int ret;
@@ -1688,6 +2162,13 @@ void disconnect_client(int id)
     g_clients[id].view_list.clear();
     closesocket(g_clients[id].m_sock);
     g_clients[id].m_sock = 0;
+    g_clients[id].first_x = 0;
+    g_clients[id].first_y = 0;
+    g_clients[id].x = 0;
+    g_clients[id].y = 0;
+    g_clients[id].hp = 0;
+    g_clients[id].level = 0;
+    g_clients[id].exp = 0;
     g_clients[id].c_lock.unlock();
 }
 
@@ -1833,12 +2314,11 @@ void initialize_NPC()
             g_clients[i].fixed = false;
 
         //어그로 타입, 일반 타입 초기화
-        if (i < (MAX_USER + NUM_NPC) / 2) {
+        if (i < MAX_USER + (NUM_NPC) / 2) {
             g_clients[i].attack_type = true;
         }
         else
             g_clients[i].attack_type = false;
-        g_clients[i].attack_type = true;
 
         char npc_name[50];
         sprintf_s(npc_name, "N%d", i);
@@ -1903,11 +2383,11 @@ bool same_position(short x, short y, short x1, short y1) {
 
 void random_move_npc(int id)
 {
-
     if (g_clients[id].live == false) return;
     //고정 캐릭터 일 경우 move 안함
     if (g_clients[id].fixed == true) return;
 
+    if (g_clients[id].attack == true) return;
     //플레이어 뷰리스트를 갱신해줘야 함 NPC가 들어갈 때와 나갈 떄
     unordered_set <int> old_viewlist;
     for (int i = 0; i < MAX_USER; ++i) {
@@ -1919,7 +2399,7 @@ void random_move_npc(int id)
     int  y = g_clients[id].y;
 
     //움직이는 NPC 범위 내 이동
-    if (!is_in_moverange(x, y, g_clients[id].first_x, g_clients[id].first_y, 5))
+    if (!is_in_moverange(x, y, g_clients[id].first_x, g_clients[id].first_y, 20))
     {
         while (true) {
             switch (rand() % 4)
@@ -1929,7 +2409,7 @@ void random_move_npc(int id)
             case 2: if (y > 0) y--; break;
             case 3: if (y < (WORLD_HEIGHT - 1)) y++; break;
             }
-            if (is_in_moverange(x, y, g_clients[id].first_x, g_clients[id].first_y, 5)) break;
+            if (is_in_moverange(x, y, g_clients[id].first_x, g_clients[id].first_y, 20)) break;
             x = g_clients[id].x;
             y = g_clients[id].y;
         }
@@ -1950,7 +2430,7 @@ void random_move_npc(int id)
         for (int i = 0; i < MAX_USER; ++i) {
             if (id == i) continue;
             if (false == g_clients[i].in_use) continue;
-            if (true == is_near_dis(id, i, 3)) {
+            if (true == is_near_dis(id, i, 10)) {
                 chase_player_id = i;
                 //cout << "ID"<<i << endl;
                 break;
@@ -1970,17 +2450,25 @@ void random_move_npc(int id)
                     int x1, y1;
                     x1 = astar.GetPos(2).x;
                     y1 = astar.GetPos(2).y;
-                    if (is_in_moverange(x1, y1, g_clients[id].first_x, g_clients[id].first_y, 5))
+                    if (is_in_moverange(x1, y1, g_clients[id].first_x, g_clients[id].first_y, 20))
                     {
                         x = x1;
                         y = y1;
                     }
                     //cout << "x: " << x << "y: " << y << endl;
+                    //공격 범위에 들어오면 공격
+                    if (is_in_attack_range(id, chase_player_id)) {
+                        if (g_clients[id].attack == false) {
+                            g_clients[id].attack_1s_time = true;
+                            add_timer(id, OP_NPC_ATTACK_1s, system_clock::now() + 1000ms, chase_player_id);
+                        }
+                    }
                 }
                 else {
                     //cout << "same posi" << endl;
                     x = g_clients[id].x;
                     y = g_clients[id].y;
+                    //어그로 몬스터가 플레이어 좌표와 같아지면 공격
                     if (g_clients[id].attack == false) {
                         g_clients[id].attack_1s_time = true;
                         add_timer(id, OP_NPC_ATTACK_1s, system_clock::now() + 1000ms, chase_player_id);
@@ -1989,8 +2477,6 @@ void random_move_npc(int id)
             }
         }
     }
-
-
 
     //장애물 충돌처리
     bool collision_obtacle = false;
@@ -2004,7 +2490,6 @@ void random_move_npc(int id)
         g_clients[id].x = x;
         g_clients[id].y = y;
     }
-
 
     if (0 <= g_clients[id].x && g_clients[id].x <= 400 && 0 <= g_clients[id].y && g_clients[id].y <= 400) {
         if (std::find(sec1.begin(), sec1.end(), id) != sec1.end() == false) {
@@ -2084,15 +2569,8 @@ void random_move_npc(int id)
         g_clients[id].is_active = false;
     }
     else {
-        add_timer(id, OP_RANDOM_MOVE, system_clock::now() + 1s, 0);
+        add_timer(id, OP_RANDOM_MOVE, system_clock::now() + 1000ms, 0);
     }
-
-    //for (auto pc : new_viewlist) {
-    //    OVER_EX* over_ex = new OVER_EX;
-    //    over_ex->object_id = pc;
-    //    over_ex->op_mode = OP_PLAYER_MOVE_NOTIFY;
-    //    PostQueuedCompletionStatus(h_iocp, 1, id, &over_ex->wsa_over);
-    //}
 
     g_clients[id].lua_lock.lock();
     lua_getglobal(g_clients[id].L, "count_move");

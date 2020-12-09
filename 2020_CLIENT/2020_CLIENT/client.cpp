@@ -13,8 +13,8 @@ using namespace chrono;
 
 sf::TcpSocket g_socket;
 
-constexpr auto SCREEN_WIDTH = 19;
-constexpr auto SCREEN_HEIGHT = 19;
+constexpr auto SCREEN_WIDTH = 20;
+constexpr auto SCREEN_HEIGHT = 20;
 
 constexpr auto TILE_WIDTH = 65;
 constexpr auto WINDOW_WIDTH = TILE_WIDTH * SCREEN_WIDTH / 2 + 10;   // size of window
@@ -28,9 +28,14 @@ int g_left_x;
 int g_top_y;
 int g_myid;
 
+bool respawn_sign = false;
+bool chatting_func = false;
+
 sf::RenderWindow* g_window;
 sf::Font g_font;
 
+
+int player_id;
 
 queue<string> chatqueue;
 
@@ -165,7 +170,7 @@ void client_initialize()
 	black_tile = OBJECT{ *board, 69, 5, TILE_WIDTH, TILE_WIDTH };
 	obtacle_tile = OBJECT{ *obtacle, 5, 5, TILE_WIDTH, TILE_WIDTH };
 	avatar = OBJECT{ *pieces, 128, 0, 64, 64 };
-	avatar.move(4, 4);
+	avatar.move(0, 0);
 }
 
 void client_finish()
@@ -191,9 +196,29 @@ void ProcessPacket(char* ptr)
 		avatar.level = my_packet->level;
 		avatar.exp = my_packet->exp;
 		avatar.show();
+		if (respawn_sign == true) {
+			cout << "Player Respawn" << endl;
+			string temp = "===================Player Respawn===================";
+			chatqueue.push(temp);
+
+			//큐가 5개 이상일 경우 POP
+			if (chatqueue.size() > 5)
+				chatqueue.pop();
+		}
+		respawn_sign = true;
 	}
 	break;
+	case SC_PACKET_LOGIN_FAIL: {
+		sc_packet_login_fail* my_packet = reinterpret_cast<sc_packet_login_fail*>(ptr);
+		cout << "Login Fail 같은 아이디로 접속한 사용자가 있습니다." << endl;
+		string temp = my_packet->message;
+		chatqueue.push(temp);
 
+		//큐가 5개 이상일 경우 POP
+		if (chatqueue.size() > 5)
+			chatqueue.pop();
+	}
+		break;
 	case SC_PACKET_ENTER:
 	{
 		sc_packet_enter* my_packet = reinterpret_cast<sc_packet_enter*>(ptr);
@@ -206,10 +231,23 @@ void ProcessPacket(char* ptr)
 			avatar.show();
 		}
 		else {
-			if (id < NPC_ID_START)
-				npcs[id] = OBJECT{ *pieces, 64, 0, 64, 64 };
-			else
-				npcs[id] = OBJECT{ *pieces, 0, 0, 64, 64 };
+			if (id < NPC_ID_START) {
+				npcs[id] = OBJECT{ *pieces, 192, 0, 64, 64 };
+			}
+			else {
+				if (id % 2 == 0)
+				{
+					npcs[id] = OBJECT{ *pieces, 0, 0, 64, 64 };
+				}
+				else
+					npcs[id] = OBJECT{ *pieces, 64, 0, 64, 64 };
+
+				if (id < MAX_USER + (NUM_NPC) / 2) {
+					if(id % 2 == 1)
+						npcs[id] = OBJECT{ *pieces, 320, 0, 64, 64 };
+				}
+			}
+
 
 			strcpy_s(npcs[id].name, my_packet->name);
 			npcs[id].set_name(my_packet->name);
@@ -252,8 +290,21 @@ void ProcessPacket(char* ptr)
 	case SC_PACKET_CHAT:
 	{
 		sc_packet_chat* my_packet = reinterpret_cast<sc_packet_chat*>(ptr);
+		if (is_npc(my_packet->id))
+			npcs[my_packet->id].add_chat(my_packet->message);
+		else
+		{
+			string temp = "[Player: ";
+			temp += to_string(my_packet->id);
+			temp += "] => ";
+			temp +=	my_packet->message;
+			chatqueue.push(temp);
 
-		npcs[my_packet->id].add_chat(my_packet->message);
+			//큐가 5개 이상일 경우 POP
+			if (chatqueue.size() > 5)
+				chatqueue.pop();
+		}
+			break;
 
 	}
 	break;
@@ -368,12 +419,12 @@ void showChat()
 
 			strcpy_s(hp_buf, chatqueue.front().c_str());
 			Chat.setString(hp_buf);
-			Chat.setPosition(10, 950 + i * 50);
+			Chat.setPosition(10, 1000 + i * 50);
 			Chat.setCharacterSize(40);
 			if (i % 2 == 0)
-				Chat.setFillColor(sf::Color::White);
-			else
 				Chat.setFillColor(sf::Color::Magenta);
+			else
+				Chat.setFillColor(sf::Color::White);
 			Chat.setStyle(sf::Text::Bold);
 			g_window->draw(Chat);
 
@@ -487,6 +538,18 @@ void client_main()
 	player_exp.setStyle(sf::Text::Bold);
 	g_window->draw(player_exp);
 
+	//플레이어 ID 표시
+	sf::Text player_idt;
+	player_idt.setFont(g_font);
+	char id_buf[100];
+	sprintf_s(id_buf, "ID: %d", player_id);
+	player_idt.setString(id_buf);
+	player_idt.setPosition(10, 200);
+	player_idt.setCharacterSize(50);
+	player_idt.setFillColor(sf::Color::Blue);
+	player_idt.setStyle(sf::Text::Bold);
+	g_window->draw(player_idt);
+
 	//채팅표시
 	showChat();
 }
@@ -524,9 +587,56 @@ void send_logout_packet()
 	send_packet(&m_packet);
 }
 
+DWORD WINAPI Chatting(LPVOID arg)
+{
+	char chat[MAX_STR_LEN];
+	ZeroMemory(&chat, sizeof(chat));
 
+	cout << "Chatting: ";
+	int cnt = 0;
+	while (1) {
+		char ch;
+		cin.get(ch);
+		if (ch == '\n')
+			break;
+		chat[cnt] = ch;
+		cnt += 1;
+		if (cnt >= MAX_STR_LEN)
+			break;
+	}
+	string temp(chat);
+
+	if (temp.size() != 0)
+	{
+		//채팅 전송
+		cs_packet_chat m_packet;
+		m_packet.type = CS_CHAT;
+		m_packet.size = sizeof(m_packet);
+		memcpy(m_packet.message, chat, sizeof(chat));
+		send_packet(&m_packet);
+	}
+
+
+	chatting_func = false;
+	return 0;
+}
+
+void send_chatting_packet()
+{
+	chatting_func = true;
+	HANDLE hTread;
+	hTread = CreateThread(NULL, 0, Chatting,
+		0, 0, NULL);
+	if (hTread == NULL) { cout << "Chatting Fail" << endl; }
+	else {
+		CloseHandle(hTread);
+	}
+}
 int main()
 {
+	cout << "Player ID를 입력하세요(숫자로만 입력):";
+	cin >> player_id;
+	getchar();
 	wcout.imbue(locale("korean"));
 	sf::Socket::Status status = g_socket.connect("127.0.0.1", SERVER_PORT);
 	g_socket.setBlocking(false);
@@ -545,6 +655,7 @@ int main()
 	sprintf_s(l_packet.name, "P%03d", t_id % 1000);
 	strcpy_s(avatar.name, l_packet.name);
 	avatar.set_name(l_packet.name);
+	l_packet.id = player_id;
 	send_packet(&l_packet);
 
 	sf::RenderWindow window(sf::VideoMode(WINDOW_WIDTH, WINDOW_HEIGHT), "2D CLIENT");
@@ -579,6 +690,10 @@ int main()
 					break;
 				case sf::Keyboard::Space:
 					send_attack_packet();
+					break;
+				case sf::Keyboard::Enter:
+					if(chatting_func==false)
+						send_chatting_packet();
 					break;
 				case sf::Keyboard::Escape:
 					window.close();

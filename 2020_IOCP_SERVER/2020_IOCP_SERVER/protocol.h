@@ -22,20 +22,18 @@ constexpr char SC_PACKET_LEAVE = 3;
 constexpr char SC_PACKET_CHAT = 4;
 constexpr char SC_PACKET_LOGIN_FAIL = 5;
 constexpr char SC_PACKET_STAT_CHANGE = 6;
-constexpr char SC_PACKET_ATTACK = 7;
 
 constexpr char CS_LOGIN = 0;
 constexpr char CS_MOVE = 1;
 constexpr char CS_ATTACK = 2;
-
-//아직 추가 안함
 constexpr char CS_CHAT = 3;
 constexpr char CS_LOGOUT = 4;
-//?
 constexpr char CS_TELEORT = 5;
 
+
 const short PLAYER_ATTACK_DAMAGE = 50;
-const short MONSTER_ATTACK_DAMAGE = 10;
+const short MONSTER_ATTACK_DAMAGE = 300;
+const short PLAYER_MAX_HP = 2000;
 
 struct sc_packet_login_ok {
 	char size;
@@ -53,20 +51,6 @@ struct sc_packet_move {
 	int id;
 	short x, y;
 	int move_time;
-};
-
-struct sc_packet_attack {
-	char size;
-	char type;
-	int player_id;
-	short player_hp;
-	short player_level;
-	short player_exp;
-	short damage;
-	short get_exp;
-	int npc_id;
-	short npc_hp;
-
 };
 
 struct sc_packet_enter {
@@ -113,6 +97,7 @@ struct cs_packet_login {
 	char  size;
 	char  type;
 	char  name[MAX_ID_LEN];
+	int id;
 };
 
 constexpr char MV_UP = 0;
