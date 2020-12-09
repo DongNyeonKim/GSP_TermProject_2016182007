@@ -463,6 +463,7 @@ void npc_die(int npc_id)
             //뷰리스트에서 삭제
             send_leave_packet(i, npc_id);
 
+            //마지막에 원인 찾기
             //g_clients[i].vl.lock();
             //g_clients[i].view_list.erase(npc_id);
             //g_clients[i].vl.unlock();
@@ -583,10 +584,6 @@ void process_attack(int id)
                 npc_die(npc);
                 //플레이어의 State 변화와 어떤 몬스터 죽였는지 알려줌
                 send_change_state_packet(id, id, npc);
-
-                //g_clients[id].vl.lock();
-                //g_clients[id].view_list.erase(npc);
-                //g_clients[id].vl.unlock();
             }
 
         }

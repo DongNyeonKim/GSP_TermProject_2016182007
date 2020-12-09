@@ -49,9 +49,9 @@ private:
 public:
 	int m_x, m_y;
 	char name[MAX_ID_LEN];
-	short hp=0;
-	short level=0;
-	short exp=0;
+	short hp = 0;
+	short level = 0;
+	short exp = 0;
 	OBJECT(sf::Texture& t, int x, int y, int x2, int y2) {
 		m_showing = false;
 		m_sprite.setTexture(t);
@@ -368,9 +368,9 @@ void showChat()
 
 			strcpy_s(hp_buf, chatqueue.front().c_str());
 			Chat.setString(hp_buf);
-			Chat.setPosition(10, 950 + i*50);
+			Chat.setPosition(10, 950 + i * 50);
 			Chat.setCharacterSize(40);
-			if(i%2==0)
+			if (i % 2 == 0)
 				Chat.setFillColor(sf::Color::White);
 			else
 				Chat.setFillColor(sf::Color::Magenta);
@@ -432,7 +432,7 @@ void client_main()
 	}
 	//장애물 출력
 	for (int i = 0; i < NUM_OBTACLE; ++i) {
-		obtacle_tile.a_move(TILE_WIDTH * (ob_positions[i].x- g_left_x) + 7, TILE_WIDTH * (ob_positions[i].y- g_top_y) + 7);
+		obtacle_tile.a_move(TILE_WIDTH * (ob_positions[i].x - g_left_x) + 7, TILE_WIDTH * (ob_positions[i].y - g_top_y) + 7);
 		obtacle_tile.a_draw();
 	}
 
@@ -469,7 +469,7 @@ void client_main()
 	char level_buf[100];
 	sprintf_s(level_buf, "Level: %d", avatar.level);
 	player_level.setString(level_buf);
-	player_level.setPosition(10,100);
+	player_level.setPosition(10, 100);
 	player_level.setCharacterSize(50);
 	player_level.setFillColor(sf::Color::Yellow);
 	player_level.setStyle(sf::Text::Bold);

@@ -10,7 +10,7 @@ constexpr int MAX_STR_LEN = 100;
 constexpr int VIEW_LIMIT = 7;
 
 //수정해줘야함
-constexpr int NUM_NPC =10000;
+constexpr int NUM_NPC = 10000;
 constexpr int NUM_OBTACLE = 2000;
 
 #pragma pack (push, 1)
@@ -24,15 +24,15 @@ constexpr char SC_PACKET_LOGIN_FAIL = 5;
 constexpr char SC_PACKET_STAT_CHANGE = 6;
 constexpr char SC_PACKET_ATTACK = 7;
 
-constexpr char CS_LOGIN = 10;
-constexpr char CS_MOVE = 11;
-constexpr char CS_ATTACK = 12;
+constexpr char CS_LOGIN = 0;
+constexpr char CS_MOVE = 1;
+constexpr char CS_ATTACK = 2;
 
 //아직 추가 안함
-constexpr char CS_CHAT = 13;
-constexpr char CS_LOGOUT = 14;
+constexpr char CS_CHAT = 3;
+constexpr char CS_LOGOUT = 4;
 //?
-constexpr char CS_TELEORT = 15;
+constexpr char CS_TELEORT = 5;
 
 const short PLAYER_ATTACK_DAMAGE = 50;
 const short MONSTER_ATTACK_DAMAGE = 10;
