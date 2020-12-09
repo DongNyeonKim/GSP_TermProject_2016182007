@@ -37,6 +37,7 @@ constexpr char OP_PLAYER_MOVE_1s = 5;
 constexpr char OP_PLAYER_ATTACK_1s = 6;
 constexpr char OP_NPC_RESPAWN = 7;
 constexpr char OP_NPC_ATTACK_1s = 8;
+constexpr char OP_PLAYER_HP_RECOVERY_5s = 9;
 
 constexpr int  KEY_SERVER = 1000000;
 
@@ -59,6 +60,8 @@ struct client_info {
 
     bool move_1s_time;
     bool attack_1s_time;
+    bool hp_recov_5s_time;
+    bool recovery = false;
 
     mutex lua_lock;
     lua_State* L;
@@ -79,6 +82,7 @@ struct client_info {
     bool live = false;
     bool fixed;
     bool attack_type;
+    bool attack = false;
 };
 
 mutex id_lock;
@@ -118,10 +122,10 @@ bool CAS(volatile bool* addr, bool expected, bool new_val)
     return atomic_compare_exchange_strong(reinterpret_cast<volatile atomic_bool*>(addr), &expected, new_val);
 }
 
-void add_timer(int obj_id, int ev_type, system_clock::time_point t)
+void add_timer(int obj_id, int ev_type, system_clock::time_point t, int target_id)
 {
     timer_l.lock();
-    event_type ev{ obj_id,t,ev_type,0 };
+    event_type ev{ obj_id,t,ev_type,target_id };
     timer_queue.push(ev);
     timer_l.unlock();
 }
@@ -166,6 +170,13 @@ void time_worker()
                 else if (ev.event_id == OP_NPC_ATTACK_1s) {
                     OVER_EX* send_over = new OVER_EX();
                     send_over->op_mode = ev.event_id;
+                    send_over->object_id = ev.target_id;
+                    PostQueuedCompletionStatus(h_iocp, 1, ev.obj_id, &send_over->wsa_over);
+                    break;
+                }
+                else if (ev.event_id == OP_PLAYER_HP_RECOVERY_5s) {
+                    OVER_EX* send_over = new OVER_EX();
+                    send_over->op_mode = ev.event_id;
                     PostQueuedCompletionStatus(h_iocp, 1, ev.obj_id, &send_over->wsa_over);
                     break;
                 }
@@ -189,7 +200,7 @@ void wake_up_npc(int id)
     bool b = false;
     if (true == g_clients[id].is_active.compare_exchange_strong(b, true))
     {
-        add_timer(id, OP_RANDOM_MOVE, system_clock::now() + 1s);
+        add_timer(id, OP_RANDOM_MOVE, system_clock::now() + 1s, 0);
     }
 }
 
@@ -274,14 +285,14 @@ void send_chat_packet(int to_client, int id, char* mess)
 void send_login_ok(int id)
 {
     sc_packet_login_ok p;
-    p.exp = 0;
-    p.hp = 100;
-    p.id = id;
-    p.level = 1;
     p.size = sizeof(p);
     p.type = SC_PACKET_LOGIN_OK;
+    p.id = id;
     p.x = g_clients[id].x;
     p.y = g_clients[id].y;
+    p.exp = g_clients[id].exp;
+    p.hp = g_clients[id].hp;
+    p.level = g_clients[id].level;
     send_packet(id, &p);
 }
 
@@ -349,30 +360,20 @@ void send_leave_packet(int to_client, int new_id)
 
 bool is_in_attack_range(int Player_id, int NPC_ID)
 {
-    if (g_clients[Player_id].x == g_clients[NPC_ID].x) {
-        if (g_clients[Player_id].y == g_clients[NPC_ID].y) {
-            return true;
-        }
+    if (g_clients[Player_id].x == g_clients[NPC_ID].x && g_clients[Player_id].y == g_clients[NPC_ID].y) {
+        return true;
     }
-    if (g_clients[Player_id].x - 1 == g_clients[NPC_ID].x) {
-        if (g_clients[Player_id].y == g_clients[NPC_ID].y) {
-            return true;
-        }
+    else if (g_clients[Player_id].x - 1 == g_clients[NPC_ID].x && g_clients[Player_id].y == g_clients[NPC_ID].y) {
+        return true;
     }
-    if (g_clients[Player_id].x + 1 == g_clients[NPC_ID].x) {
-        if (g_clients[Player_id].y == g_clients[NPC_ID].y) {
-            return true;
-        }
+    else if (g_clients[Player_id].x + 1 == g_clients[NPC_ID].x && g_clients[Player_id].y == g_clients[NPC_ID].y) {
+        return true;
     }
-    if (g_clients[Player_id].y - 1 == g_clients[NPC_ID].y) {
-         if (g_clients[Player_id].x == g_clients[NPC_ID].x) {
-            return true;
-        }
+    else if (g_clients[Player_id].y - 1 == g_clients[NPC_ID].y && g_clients[Player_id].x == g_clients[NPC_ID].x) {
+        return true;
     }
-    if (g_clients[Player_id].y + 1 == g_clients[NPC_ID].y) {
-        if (g_clients[Player_id].x == g_clients[NPC_ID].x) {
-            return true;
-        }
+    else if (g_clients[Player_id].y + 1 == g_clients[NPC_ID].y && g_clients[Player_id].x == g_clients[NPC_ID].x) {
+        return true;
     }
     else
         return false;
@@ -390,9 +391,9 @@ void set_player_level(int id)
         g_clients[id].level = 3;
     else if (800 <= g_clients[id].exp && g_clients[id].exp < 1200)
         g_clients[id].level = 4;
-    else if(1200 <= g_clients[id].exp)
+    else if (1200 <= g_clients[id].exp)
         g_clients[id].level = 5;
-    else 
+    else
         g_clients[id].level = 0;
 
 }
@@ -401,7 +402,18 @@ void respawn_npc(int npc_id)
 {
     g_clients[npc_id].x = g_clients[npc_id].first_x;
     g_clients[npc_id].y = g_clients[npc_id].first_y;
-    g_clients[npc_id].hp = 1000;
+    if (g_clients[npc_id].level == 1)
+        g_clients[npc_id].hp = 50;
+    else if (g_clients[npc_id].level == 2)
+        g_clients[npc_id].hp = 100;
+    else if (g_clients[npc_id].level == 3)
+        g_clients[npc_id].hp = 150;
+    else if (g_clients[npc_id].level == 4)
+        g_clients[npc_id].hp = 200;
+    else if (g_clients[npc_id].level == 5)
+        g_clients[npc_id].hp = 250;
+
+
     g_clients[npc_id].live = true;
 
     //섹터링
@@ -443,46 +455,88 @@ void npc_die(int npc_id)
     sec2.erase(std::remove(sec2.begin(), sec2.end(), npc_id), sec2.end());
     sec3.erase(std::remove(sec3.begin(), sec3.end(), npc_id), sec3.end());
     sec4.erase(std::remove(sec4.begin(), sec4.end(), npc_id), sec4.end());
+
     for (int i = 0; i < MAX_USER; ++i) {
         if (true == g_clients[i].in_use) {
             if (false == is_near(i, npc_id)) continue;
             //NPC가 죽을 경우 해당 NPC를 보고 있는 모든 플레이어 에게 leave 패킷을 전송 하고 
             //뷰리스트에서 삭제
             send_leave_packet(i, npc_id);
+
             //g_clients[i].vl.lock();
             //g_clients[i].view_list.erase(npc_id);
             //g_clients[i].vl.unlock();
         }
-        
+
     }
 
-    add_timer(npc_id, OP_NPC_RESPAWN, system_clock::now() + 10s);
+    add_timer(npc_id, OP_NPC_RESPAWN, system_clock::now() + 10s, 0);
+}
+
+void recovery_player_hp(int player_id)
+{
+    if (true == g_clients[player_id].hp_recov_5s_time) return;
+    if (false == g_clients[player_id].recovery) return;
+    //회복 중이면 중복 호출으 방지하기 위해 회복중임을 표시
+    g_clients[player_id].recovery = true;
+
+    //10프로 증가
+    g_clients[player_id].hp += g_clients[player_id].hp / 10;
+
+    if (g_clients[player_id].hp > 5000)
+        g_clients[player_id].hp = 5000;
+
+    send_change_state_packet(player_id, player_id, 0);
+
+    //체력이 5000미만일 경우 재 호출
+    if (g_clients[player_id].hp < 5000) {
+        g_clients[player_id].hp_recov_5s_time = true;
+        add_timer(player_id, OP_PLAYER_HP_RECOVERY_5s, system_clock::now() + 5000ms, 0);
+    }
+    else
+        g_clients[player_id].recovery = false;
+
 }
 
 void npc_attack(int npc_id, int player_id)
 {
     if (true == g_clients[npc_id].attack_1s_time) return;
+    if (g_clients[npc_id].live == false) return;
+    if (g_clients[npc_id].is_active == false) return;
 
     if (is_in_attack_range(npc_id, player_id))
     {
+        g_clients[npc_id].attack = true;
         g_clients[player_id].hp -= MONSTER_ATTACK_DAMAGE;
 
         send_change_state_packet(player_id, player_id, npc_id);
 
-        //플레이어가 죽으면
+        //HP가 5000보다 적으면 피회복 시작
+        if (g_clients[player_id].hp < 5000)
+        {
+            if (g_clients[player_id].recovery == false) {
+                g_clients[player_id].recovery = true;
+                g_clients[player_id].hp_recov_5s_time = true;
+                add_timer(player_id, OP_PLAYER_HP_RECOVERY_5s, system_clock::now() + 5000ms, 0);
+            }
+        }
+        //플레이어가 죽으면 처리
+        //?
 
     }
     //노티파이랑 랜덤 무브 참고해서 만들고
     //에드 타이머는 플레이어가 가까이 있으면 가고 없으면 제끼라웃
     if (is_in_attack_range(npc_id, player_id)) {
         g_clients[npc_id].attack_1s_time = true;
-        add_timer(npc_id, OP_NPC_ATTACK_1s, system_clock::now() + 1s);
+        add_timer(npc_id, OP_NPC_ATTACK_1s, system_clock::now() + 1000ms, player_id);
     }
+    else
+        g_clients[npc_id].attack = false;
 
 }
 
 void update_player_exp(int id, int npc) {
-    short exp=0;
+    short exp = 0;
     exp = g_clients[npc].level * 5;
 
     if (g_clients[npc].attack_type == true) {
@@ -499,15 +553,20 @@ void update_player_exp(int id, int npc) {
 void process_attack(int id)
 {
     if (true == g_clients[id].attack_1s_time) return;
-    for (const int npc : g_clients[id].view_list) {
 
+    for (auto& npc : g_clients[id].view_list) {
         if (true == is_in_attack_range(id, npc)) {
             //해당 NPC HP 감소
             g_clients[npc].hp -= PLAYER_ATTACK_DAMAGE;
-            
+
             //플레이어에게 NPC 상태 변화 알림
             send_change_state_packet(id, npc, npc);
 
+            //NPC 공격 알림
+            if (g_clients[npc].attack == false) {
+                g_clients[npc].attack_1s_time = true;
+                add_timer(npc, OP_NPC_ATTACK_1s, system_clock::now() + 1000ms, id);
+            }
             //npc_attack(npc, id);
             //NPC가 죽으면
             if (g_clients[npc].hp <= 0) {
@@ -534,7 +593,7 @@ void process_attack(int id)
     }
 
     g_clients[id].attack_1s_time = true;
-    add_timer(id, OP_PLAYER_ATTACK_1s, system_clock::now() + 1s);
+    add_timer(id, OP_PLAYER_ATTACK_1s, system_clock::now() + 1s, 0);
 }
 
 void process_move(int id, char dir)
@@ -960,7 +1019,7 @@ void process_move(int id, char dir)
     //      g_clients[id].is_active = false;
     //}
 
-    
+
 
     for (int ob : new_viewlist) {
         if (0 == old_viewlist.count(ob)) {
@@ -990,6 +1049,7 @@ void process_move(int id, char dir)
             }
         }
     }
+
     for (int ob : old_viewlist) {
         if (0 == new_viewlist.count(ob)) {
             g_clients[id].view_list.erase(ob);
@@ -1014,7 +1074,7 @@ void process_move(int id, char dir)
     }
 
     g_clients[id].move_1s_time = true;
-    add_timer(id, OP_PLAYER_MOVE_1s, system_clock::now() + 1ms);
+    add_timer(id, OP_PLAYER_MOVE_1s, system_clock::now() + 1ms, 0);
 
 }
 
@@ -1570,9 +1630,9 @@ void add_new_client(SOCKET ns)
 
         g_clients[i].x = rand() % WORLD_WIDTH;
         g_clients[i].y = rand() % WORLD_HEIGHT;
-        g_clients[i].exp = 0;
         g_clients[i].hp = 5000;
         g_clients[i].level = 0;
+        g_clients[i].exp = 0;
         g_clients[i].first_x = g_clients[i].x;
         g_clients[i].first_y = g_clients[i].y;
         //섹터추가
@@ -1689,7 +1749,7 @@ void worker_thread()
             lua_pcall(g_clients[key].L, 1, 1, 0);
             g_clients[key].lua_lock.unlock();
             delete over_ex;
-            break; 
+            break;
         }
         case OP_PLAYER_MOVE_1s: {
             g_clients[key].move_1s_time = false;
@@ -1701,8 +1761,15 @@ void worker_thread()
             delete over_ex;
             break;
         }
+        case OP_PLAYER_HP_RECOVERY_5s: {
+            g_clients[key].hp_recov_5s_time = false;
+            recovery_player_hp(key);
+            delete over_ex;
+            break;
+        }
         case OP_NPC_ATTACK_1s: {
             g_clients[key].attack_1s_time = false;
+            npc_attack(key, over_ex->object_id);
             delete over_ex;
             break;
         }
@@ -1785,31 +1852,31 @@ void initialize_NPC()
         //레벨 랜덤 설정 후 레벨 별로 Hp 설정
         switch (rand() % 5)
         {
-            case 0:{
-                g_clients[i].hp = 50;
-                g_clients[i].level = 1;
-                break;
-            }
-            case 1: {
-                g_clients[i].hp = 100;
-                g_clients[i].level = 2;
-                break;
-            }
-            case 2: {
-                g_clients[i].hp = 150;
-                g_clients[i].level = 3;
-                break;
-            }
-            case 3: {
-                g_clients[i].hp = 200;
-                g_clients[i].level = 4;
-                break;
-            }
-            case 4: {
-                g_clients[i].hp = 250;
-                g_clients[i].level = 5;
-                break;
-            }
+        case 0: {
+            g_clients[i].hp = 50;
+            g_clients[i].level = 1;
+            break;
+        }
+        case 1: {
+            g_clients[i].hp = 100;
+            g_clients[i].level = 2;
+            break;
+        }
+        case 2: {
+            g_clients[i].hp = 150;
+            g_clients[i].level = 3;
+            break;
+        }
+        case 3: {
+            g_clients[i].hp = 200;
+            g_clients[i].level = 4;
+            break;
+        }
+        case 4: {
+            g_clients[i].hp = 250;
+            g_clients[i].level = 5;
+            break;
+        }
         }
 
         lua_State* L = g_clients[i].L = luaL_newstate();
@@ -1854,18 +1921,16 @@ void random_move_npc(int id)
     int  x = g_clients[id].x;
     int  y = g_clients[id].y;
 
-
-
     //움직이는 NPC 범위 내 이동
     if (!is_in_moverange(x, y, g_clients[id].first_x, g_clients[id].first_y, 5))
     {
         while (true) {
             switch (rand() % 4)
             {
-                case 0: if (x > 0) x--; break;
-                case 1: if (x < (WORLD_WIDTH - 1)) x++; break;
-                case 2: if (y > 0) y--; break;
-                case 3: if (y < (WORLD_HEIGHT - 1)) y++; break;
+            case 0: if (x > 0) x--; break;
+            case 1: if (x < (WORLD_WIDTH - 1)) x++; break;
+            case 2: if (y > 0) y--; break;
+            case 3: if (y < (WORLD_HEIGHT - 1)) y++; break;
             }
             if (is_in_moverange(x, y, g_clients[id].first_x, g_clients[id].first_y, 5)) break;
             x = g_clients[id].x;
@@ -1919,6 +1984,10 @@ void random_move_npc(int id)
                     //cout << "same posi" << endl;
                     x = g_clients[id].x;
                     y = g_clients[id].y;
+                    if (g_clients[id].attack == false) {
+                        g_clients[id].attack_1s_time = true;
+                        add_timer(id, OP_NPC_ATTACK_1s, system_clock::now() + 1000ms, chase_player_id);
+                    }
                 }
             }
         }
@@ -1973,13 +2042,13 @@ void random_move_npc(int id)
 
     unordered_set <int> new_viewlist;
     for (int i = 0; i < MAX_USER; ++i) {
-       if (id == i) continue;
-       if (false == g_clients[i].in_use) continue;
-       if (true == is_near(id, i)) {
-          new_viewlist.insert(i);
-       }
-       else
-          g_clients[id].is_active = false;
+        if (id == i) continue;
+        if (false == g_clients[i].in_use) continue;
+        if (true == is_near(id, i)) {
+            new_viewlist.insert(i);
+        }
+        else
+            g_clients[id].is_active = false;
     }
 
     for (auto pl : old_viewlist) {
@@ -2018,7 +2087,7 @@ void random_move_npc(int id)
         g_clients[id].is_active = false;
     }
     else {
-        add_timer(id, OP_RANDOM_MOVE, system_clock::now() + 1s);
+        add_timer(id, OP_RANDOM_MOVE, system_clock::now() + 1s, 0);
     }
 
     //for (auto pc : new_viewlist) {
@@ -2033,7 +2102,6 @@ void random_move_npc(int id)
     lua_pcall(g_clients[id].L, 0, 0, 0);
     g_clients[id].lua_lock.unlock();
 }
-
 
 int main()
 {

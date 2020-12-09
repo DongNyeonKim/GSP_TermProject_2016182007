@@ -1,5 +1,6 @@
 ﻿  iocp_server.cpp
-C:\Users\DongNyeonKim\Desktop\3학년 2학기\게임 서버 프로그래밍\GSP_TermProject_2016182007_김동년\2020_IOCP_SERVER\2020_IOCP_SERVER\iocp_server.cpp(1715,17): warning C4244: '초기화 중': 'lua_Integer'에서 'int'(으)로 변환하면서 데이터가 손실될 수 있습니다.
-C:\Users\DongNyeonKim\Desktop\3학년 2학기\게임 서버 프로그래밍\GSP_TermProject_2016182007_김동년\2020_IOCP_SERVER\2020_IOCP_SERVER\iocp_server.cpp(1724,17): warning C4244: '초기화 중': 'lua_Integer'에서 'int'(으)로 변환하면서 데이터가 손실될 수 있습니다.
-C:\Users\DongNyeonKim\Desktop\3학년 2학기\게임 서버 프로그래밍\GSP_TermProject_2016182007_김동년\2020_IOCP_SERVER\2020_IOCP_SERVER\iocp_server.cpp(379): warning C4715: 'is_in_attack_range': 모든 제어 경로에서 값을 반환하지는 않습니다.
+C:\Users\DongNyeonKim\Desktop\3학년 2학기\게임 서버 프로그래밍\GSP_TermProject_2016182007_김동년\2020_IOCP_SERVER\2020_IOCP_SERVER\iocp_server.cpp(1782,17): warning C4244: '초기화 중': 'lua_Integer'에서 'int'(으)로 변환하면서 데이터가 손실될 수 있습니다.
+C:\Users\DongNyeonKim\Desktop\3학년 2학기\게임 서버 프로그래밍\GSP_TermProject_2016182007_김동년\2020_IOCP_SERVER\2020_IOCP_SERVER\iocp_server.cpp(1791,17): warning C4244: '초기화 중': 'lua_Integer'에서 'int'(으)로 변환하면서 데이터가 손실될 수 있습니다.
+  LINK : C:\Users\DongNyeonKim\Desktop\3학년 2학기\게임 서버 프로그래밍\GSP_TermProject_2016182007_김동년\2020_IOCP_SERVER\x64\Debug\2020_IOCP_SERVER.exe을(를) 찾을 수 없거나 마지막 증분 링크에 의해 빌드되지 않았습니다. 전체 링크를 수행하고 있습니다.
+LINK : warning LNK4098: 'LIBCMT' defaultlib가 다른 라이브러리와 충돌합니다. /NODEFAULTLIB:library를 사용하십시오.
   2020_IOCP_SERVER.vcxproj -> C:\Users\DongNyeonKim\Desktop\3학년 2학기\게임 서버 프로그래밍\GSP_TermProject_2016182007_김동년\2020_IOCP_SERVER\x64\Debug\2020_IOCP_SERVER.exe
