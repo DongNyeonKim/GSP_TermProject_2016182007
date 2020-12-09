@@ -439,6 +439,24 @@ void respawn_npc(int npc_id)
             wake_up_npc(npc_id);
         }
     }
+
+    g_clients[npc_id].lua_lock.lock();
+    lua_getglobal(g_clients[npc_id].L, "set_x");
+    lua_pushnumber(g_clients[npc_id].L, g_clients[npc_id].x);
+    lua_pcall(g_clients[npc_id].L, 1, 1, 0);
+
+    lua_getglobal(g_clients[npc_id].L, "set_y");
+    lua_pushnumber(g_clients[npc_id].L, g_clients[npc_id].y);
+    lua_pcall(g_clients[npc_id].L, 1, 1, 0);
+
+    lua_getglobal(g_clients[npc_id].L, "set_level");
+    lua_pushnumber(g_clients[npc_id].L, g_clients[npc_id].level);
+    lua_pcall(g_clients[npc_id].L, 1, 1, 0);
+
+    lua_getglobal(g_clients[npc_id].L, "set_hp");
+    lua_pushnumber(g_clients[npc_id].L, g_clients[npc_id].hp);
+    lua_pcall(g_clients[npc_id].L, 1, 1, 0);
+    g_clients[npc_id].lua_lock.unlock();
 }
 
 void npc_die(int npc_id)
@@ -954,11 +972,11 @@ void npc_attack(int npc_id, int player_id)
         //HP가 5000보다 적으면 피회복 시작
         if (g_clients[player_id].hp < PLAYER_MAX_HP)
         {
-            //if (g_clients[player_id].recovery == false) {
-            //    g_clients[player_id].recovery = true;
-            //    g_clients[player_id].hp_recov_5s_time = true;
-            //    add_timer(player_id, OP_PLAYER_HP_RECOVERY_5s, system_clock::now() + 5000ms, 0);
-            //}
+            if (g_clients[player_id].recovery == false) {
+                g_clients[player_id].recovery = true;
+                g_clients[player_id].hp_recov_5s_time = true;
+                add_timer(player_id, OP_PLAYER_HP_RECOVERY_5s, system_clock::now() + 5000ms, 0);
+            }
         }
         //플레이어가 죽으면 처리
         //?
@@ -1029,7 +1047,11 @@ void process_attack(int id)
                 //플레이어의 State 변화와 어떤 몬스터 죽였는지 알려줌
                 send_change_state_packet(id, id, npc);
             }
-
+            g_clients[npc].lua_lock.lock();
+            lua_getglobal(g_clients[npc].L, "set_hp");
+            lua_pushnumber(g_clients[npc].L, g_clients[npc].hp);
+            lua_pcall(g_clients[npc].L, 1, 1, 0);
+            g_clients[npc].lua_lock.unlock();
         }
     }
 
@@ -1515,7 +1537,7 @@ void process_move(int id, char dir)
     }
 
     g_clients[id].move_1s_time = true;
-    add_timer(id, OP_PLAYER_MOVE_1s, system_clock::now() + 1ms, 0);
+    add_timer(id, OP_PLAYER_MOVE_1s, system_clock::now() + 1000ms, 0);
 
 }
 
@@ -1533,7 +1555,6 @@ void process_packet(int id)
         bool find_use = false;
         for (int i = 0; i < MAX_USER; i++) {
             if (g_clients[i].id == p->id) {
-                cout << "here" << endl;
                 find_use = true;
             }
         }
@@ -2366,6 +2387,31 @@ void initialize_NPC()
         lua_pushnumber(L, i);
         lua_pcall(L, 1, 1, 0);
 
+        lua_getglobal(L, "set_x");
+        lua_pushnumber(L, g_clients[i].x);
+        lua_pcall(L, 1, 1, 0);
+
+        lua_getglobal(L, "set_y");
+        lua_pushnumber(L, g_clients[i].y);
+        lua_pcall(L, 1, 1, 0);
+
+        lua_getglobal(L, "set_level");
+        lua_pushnumber(L, g_clients[i].level);
+        lua_pcall(L, 1, 1, 0);
+
+        lua_getglobal(L, "set_hp");
+        lua_pushnumber(L, g_clients[i].hp);
+        lua_pcall(L, 1, 1, 0);
+
+        lua_getglobal(L, "set_move_type");
+        lua_pushnumber(L, g_clients[i].fixed);
+        lua_pcall(L, 1, 1, 0);
+
+        lua_getglobal(L, "set_attack_type");
+        lua_pushnumber(L, g_clients[i].attack_type);
+        lua_pcall(L, 1, 1, 0);
+
+
         lua_register(L, "API_SendMessage", API_SendMessage);
         lua_register(L, "API_get_x", API_get_x);
         lua_register(L, "API_get_y", API_get_y);
@@ -2395,8 +2441,17 @@ void random_move_npc(int id)
         if (true == is_near(id, i)) old_viewlist.insert(i);
     }
 
-    int  x = g_clients[id].x;
-    int  y = g_clients[id].y;
+    //LUA
+    g_clients[id].lua_lock.lock();
+    lua_getglobal(g_clients[id].L, "my_x");		
+    int x = lua_tonumber(g_clients[id].L, -1); 
+    lua_getglobal(g_clients[id].L, "my_y");
+    int y = lua_tonumber(g_clients[id].L, -1);
+    lua_pop(g_clients[id].L, 2);
+    g_clients[id].lua_lock.unlock();
+
+    //int  x = g_clients[id].x;
+    //int  y = g_clients[id].y;
 
     //움직이는 NPC 범위 내 이동
     if (!is_in_moverange(x, y, g_clients[id].first_x, g_clients[id].first_y, 20))
@@ -2489,6 +2544,18 @@ void random_move_npc(int id)
     if (!collision_obtacle) {
         g_clients[id].x = x;
         g_clients[id].y = y;
+
+
+        //LUA
+        g_clients[id].lua_lock.lock();
+        lua_getglobal(g_clients[id].L, "set_x");
+        lua_pushnumber(g_clients[id].L, g_clients[id].x);
+        lua_pcall(g_clients[id].L, 1, 1, 0);
+        lua_getglobal(g_clients[id].L, "set_y");
+        lua_pushnumber(g_clients[id].L, g_clients[id].y);
+        lua_pcall(g_clients[id].L, 1, 1, 0);
+        g_clients[id].lua_lock.unlock();
+
     }
 
     if (0 <= g_clients[id].x && g_clients[id].x <= 400 && 0 <= g_clients[id].y && g_clients[id].y <= 400) {

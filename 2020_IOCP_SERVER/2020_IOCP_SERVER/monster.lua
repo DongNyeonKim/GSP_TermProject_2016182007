@@ -1,10 +1,42 @@
 myid = 99999;
+my_x=-1;
+my_y=-1;
+my_level = -1;
+my_hp = -1;
+move_type = false;
+attack_type = false;
+
+
 count=0;
 is_meet = false;
 p_id=null;
 
 function set_uid(x)
 	myid = x;
+end
+
+function set_x(x)
+	my_x = x;
+end
+
+function set_y(x)
+	my_y = x;
+end
+
+function set_level(x)
+	my_level = x;
+end
+
+function set_hp(x)
+	my_hp = x;
+end
+
+function set_move_type(x)
+	move_type = x;
+end
+
+function set_attack_type(x)
+	attack_type = x;
 end
 
 function count_move()
@@ -15,7 +47,6 @@ function count_move()
 		npc_bye();
 	end
 end
-
 
 function npc_bye()
 	API_SendMessage(myid, p_id, "Bye");

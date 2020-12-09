@@ -64,6 +64,7 @@ atomic_int client_to_close;
 atomic_int active_clients;
 
 int			global_delay;				// ms단위, 1000이 넘으면 클라이언트 증가 종료
+int p_id=0;
 
 vector <thread*> worker_threads;
 thread test_thread;
@@ -166,7 +167,8 @@ void ProcessPacket(int ci, unsigned char packet[])
 	}
 	break;
 	case SC_PACKET_CHAT: break;
-	case SC_PACKET_ATTACK: break;
+	case SC_PACKET_LOGIN_FAIL: break;
+	case SC_PACKET_STAT_CHANGE: break;
 	default: MessageBox(hWnd, L"Unknown Packet Type", L"ERROR", 0);
 		while (true);
 	}
@@ -321,6 +323,8 @@ void Adjust_Number_Of_Client()
 	sprintf_s(l_packet.name, "%d", temp);
 	l_packet.size = sizeof(l_packet);
 	l_packet.type = CS_LOGIN;
+	l_packet.id = p_id;
+	p_id++;
 	SendPacket(num_connections, &l_packet);
 
 

@@ -10,7 +10,7 @@ constexpr int MAX_STR_LEN = 100;
 constexpr int VIEW_LIMIT = 7;
 
 //수정해줘야함
-constexpr int NUM_NPC = 10000;
+constexpr int NUM_NPC = 100000;
 constexpr int NUM_OBTACLE = 2000;
 
 #pragma pack (push, 1)
@@ -32,7 +32,7 @@ constexpr char CS_TELEORT = 5;
 
 
 const short PLAYER_ATTACK_DAMAGE = 50;
-const short MONSTER_ATTACK_DAMAGE = 300;
+const short MONSTER_ATTACK_DAMAGE = 30;
 const short PLAYER_MAX_HP = 2000;
 
 struct sc_packet_login_ok {
