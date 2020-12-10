@@ -121,6 +121,9 @@ mutex timer_l;
 
 void random_move_npc(int id);
 void disconnect_client(int id);
+bool find_db(int id);
+void insert_db(int id, int x, int y, int hp, int level, int exp, int f_x, int f_y);
+void update_db(int id, int x, int y, int hp, int level, int exp, int f_x, int f_y);
 
 bool CAS(volatile bool* addr, bool expected, bool new_val)
 {
@@ -1558,7 +1561,7 @@ void process_packet(int id)
         //이미 접속한 아이디 인지 확인
         bool find_use = false;
         for (int i = 0; i < MAX_USER; i++) {
-            if (g_clients[i].id == p->id) {
+            if (g_clients[i].id == p->id && g_clients[i].in_use==true) {
                 find_use = true;
             }
         }
@@ -1567,14 +1570,34 @@ void process_packet(int id)
             disconnect_client(id);
         }
 
+        g_clients[id].id = p->id;
+
         if (!find_db(id)) {
-            insert_db(id, g_clients[id].x, g_clients[id].y, g_clients[id].hp, g_clients[id].level, g_clients[id].exp, g_clients[id].first_x, g_clients[id].first_y);
+            //새로운 데이터 포기화
+            g_clients[id].x = rand() % WORLD_WIDTH;
+            g_clients[id].y = rand() % WORLD_HEIGHT;
+            g_clients[id].hp = PLAYER_MAX_HP;
+            g_clients[id].level = 0;
+            g_clients[id].exp = 0;
+            g_clients[id].first_x = g_clients[id].x;
+            g_clients[id].first_y = g_clients[id].y;
+            //섹터추가
+            if (0 <= g_clients[id].x && g_clients[id].x <= 400 && 0 <= g_clients[id].y && g_clients[id].y <= 400)
+                sec1.push_back(id);
+            else if (401 <= g_clients[id].x && g_clients[id].x <= 800 && 0 <= g_clients[id].y && g_clients[id].y <= 400)
+                sec2.push_back(id);
+            else if (0 <= g_clients[id].x && g_clients[id].x <= 400 && 401 <= g_clients[id].y && g_clients[id].y <= 800)
+                sec3.push_back(id);
+            else if (401 <= g_clients[id].x && g_clients[id].x <= 800 && 401 <= g_clients[id].y && g_clients[id].y <= 800)
+                sec4.push_back(id);
+            else
+                cout << "Sector Add Error" << endl;
+            insert_db(g_clients[id].id, g_clients[id].x, g_clients[id].y, g_clients[id].hp, g_clients[id].level, g_clients[id].exp, g_clients[id].first_x, g_clients[id].first_y);
         }
 
         //로그인 오케이 패킷 전송
         send_login_ok(id);
 
-        g_clients[id].id = p->id;
 
         //주위에 존재하는 플레이어들을 알려줌 현재는 User만 알려줌 NPC도 알려줘야함
         if (0 <= g_clients[id].x && g_clients[id].x <= 380 && 0 <= g_clients[id].y && g_clients[id].y <= 380)
@@ -2118,6 +2141,7 @@ void add_new_client(SOCKET ns)
         g_clients[i].in_use = true;
         g_clients[i].m_sock = ns;
         g_clients[i].name[0] = 0;
+        g_clients[i].id = -1;
         g_clients[i].c_lock.unlock();
 
         g_clients[i].m_packet_start = g_clients[i].m_recv_over.iocp_buf;
@@ -2127,25 +2151,6 @@ void add_new_client(SOCKET ns)
         g_clients[i].m_recv_over.wsa_buf.len = sizeof(g_clients[i].m_recv_over.iocp_buf);
         ZeroMemory(&g_clients[i].m_recv_over.wsa_over, sizeof(g_clients[i].m_recv_over.wsa_over));
         g_clients[i].m_recv_start = g_clients[i].m_recv_over.iocp_buf;
-
-        g_clients[i].x = rand() % WORLD_WIDTH;
-        g_clients[i].y = rand() % WORLD_HEIGHT;
-        g_clients[i].hp = PLAYER_MAX_HP;
-        g_clients[i].level = 0;
-        g_clients[i].exp = 0;
-        g_clients[i].first_x = g_clients[i].x;
-        g_clients[i].first_y = g_clients[i].y;
-        //섹터추가
-        if (0 <= g_clients[i].x && g_clients[i].x <= 400 && 0 <= g_clients[i].y && g_clients[i].y <= 400)
-            sec1.push_back(i);
-        else if (401 <= g_clients[i].x && g_clients[i].x <= 800 && 0 <= g_clients[i].y && g_clients[i].y <= 400)
-            sec2.push_back(i);
-        else if (0 <= g_clients[i].x && g_clients[i].x <= 400 && 401 <= g_clients[i].y && g_clients[i].y <= 800)
-            sec3.push_back(i);
-        else if (401 <= g_clients[i].x && g_clients[i].x <= 800 && 401 <= g_clients[i].y && g_clients[i].y <= 800)
-            sec4.push_back(i);
-        else
-            cout << "Sector Add Error" << endl;
 
         CreateIoCompletionPort(reinterpret_cast<HANDLE>(ns), h_iocp, i, 0);
         DWORD flags = 0;
@@ -2173,7 +2178,7 @@ void disconnect_client(int id)
 {
     cout << "Player:" << id << " Disconnect" << endl;
     //데이터 베이스 업데이트
-    update_db(id, g_clients[id].x, g_clients[id].y, g_clients[id].hp, g_clients[id].level, g_clients[id].exp, g_clients[id].first_x, g_clients[id].first_y);
+    update_db(g_clients[id].id, g_clients[id].x, g_clients[id].y, g_clients[id].hp, g_clients[id].level, g_clients[id].exp, g_clients[id].first_x, g_clients[id].first_y);
     for (int i = 0; i < MAX_USER; ++i) {
         if (true == g_clients[i].in_use)
             if (i != id) {
@@ -2688,7 +2693,7 @@ bool find_db(int id)
     SQLLEN cbID = 0, cbPOS_X = 0, cbPOS_Y = 0, cbHP = 0, cbLEVEL = 0, cbEXP = 0, cbF_X = 0, cbF_Y = 0;
 
     SQLWCHAR query[1024];
-    wsprintf(query, L"SELECT ID, POS_X, POS_Y, HP, P_LEVEL, EXP, F_POS_X, F_POS_Y FROM USER_TABLE WHERE ID= %d ", id);
+    wsprintf(query, L"EXECUTE find_data %d ", g_clients[id].id);
     bool no_data = true;
     std::wcout.imbue(std::locale("korean"));
 
@@ -2735,13 +2740,13 @@ bool find_db(int id)
                             if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO)
                             {
                                 no_data = false;
-                                g_clients[ID].x = POS_X;
-                                g_clients[ID].y = POS_Y;
-                                g_clients[ID].hp = HP;
-                                g_clients[ID].level = LEVEL;
-                                g_clients[ID].exp = EXP;
-                                g_clients[ID].first_x = F_X;
-                                g_clients[ID].first_y = F_Y;
+                                g_clients[id].x = POS_X;
+                                g_clients[id].y = POS_Y;
+                                g_clients[id].hp = HP;
+                                g_clients[id].level = LEVEL;
+                                g_clients[id].exp = EXP;
+                                g_clients[id].first_x = F_X;
+                                g_clients[id].first_y = F_Y;
                             }
                             else
                                 break;
@@ -2764,11 +2769,11 @@ bool find_db(int id)
         SQLFreeHandle(SQL_HANDLE_ENV, henv);
     }
     if (no_data) {
-        cout << "데이터 없음" << endl;
+        //cout << "데이터 없음" << endl;
         return false;
     }
     else {
-        cout << "데이터 있음" << endl;
+        //cout << "데이터 있음" << endl;
         return true;
     }
 }
@@ -2781,7 +2786,7 @@ void insert_db(int id, int x, int y, int hp, int level, int exp, int f_x, int f_
     //데이터를 읽는 변수
     SQLWCHAR query[1024];
 
-    wsprintf(query, L"INSERT INTO USER_TABLE (ID, POS_X, POS_Y, HP, P_LEVEL, EXP, F_POS_X, F_POS_Y) VALUES (%d, %d, %d, %d, %d, %d, %d ,%d)", id, x, y, hp, level, exp, f_x, f_y);
+    wsprintf(query, L"EXECUTE insert_data %d, %d, %d, %d, %d, %d, %d ,%d", id, x, y, hp, level, exp, f_x, f_y);
     std::wcout.imbue(std::locale("korean"));
 
     // Allocate environment handle  
@@ -2835,7 +2840,7 @@ void update_db(int id, int x, int y, int hp, int level, int exp, int f_x, int f_
     //데이터를 읽는 변수
     SQLWCHAR query[1024];
 
-    wsprintf(query, L"UPDATE USER_TABLE SET POS_X=%d, POS_Y=%d, HP=%d, P_LEVEL=%d, EXP=%d, F_POS_X=%d, F_POS_Y=%d WHERE ID = %d", x, y, hp, level, exp, f_x, f_y, id);
+    wsprintf(query, L"EXECUTE update_data %d, %d, %d, %d, %d, %d, %d, %d", x, y, hp, level, exp, f_x, f_y, id);
     std::wcout.imbue(std::locale("korean"));
 
     // Allocate environment handle  
@@ -2880,7 +2885,6 @@ void update_db(int id, int x, int y, int hp, int level, int exp, int f_x, int f_
         SQLFreeHandle(SQL_HANDLE_ENV, henv);
     }
 }
-
 
 int main()
 {
