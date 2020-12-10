@@ -589,11 +589,12 @@ void send_move_packet(unsigned char dir)
 	send_packet(&m_packet);
 }
 
-void send_attack_packet()
+void send_attack_packet(int attack_type)
 {
 	cs_packet_attack m_packet;
 	m_packet.type = CS_ATTACK;
 	m_packet.size = sizeof(m_packet);
+	m_packet.attack_type = attack_type;
 	send_packet(&m_packet);
 }
 
@@ -707,8 +708,11 @@ int main()
 				case sf::Keyboard::Down:
 					send_move_packet(MV_DOWN);
 					break;
-				case sf::Keyboard::Space:
-					send_attack_packet();
+				case sf::Keyboard::Z:
+					send_attack_packet(AT_NORMAL);
+					break;
+				case sf::Keyboard::X:
+					send_attack_packet(AT_RANGE);
 					break;
 				case sf::Keyboard::Enter:
 					if(chatting_func==false)

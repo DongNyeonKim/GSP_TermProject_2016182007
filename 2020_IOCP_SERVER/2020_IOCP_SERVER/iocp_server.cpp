@@ -372,7 +372,7 @@ void send_leave_packet(int to_client, int new_id)
     send_packet(to_client, &p);
 }
 
-bool is_in_attack_range(int Player_id, int NPC_ID)
+bool is_in_normal_attack_range(int Player_id, int NPC_ID)
 {
     if (g_clients[Player_id].x == g_clients[NPC_ID].x && g_clients[Player_id].y == g_clients[NPC_ID].y) {
         return true;
@@ -387,6 +387,39 @@ bool is_in_attack_range(int Player_id, int NPC_ID)
         return true;
     }
     else if (g_clients[Player_id].y + 1 == g_clients[NPC_ID].y && g_clients[Player_id].x == g_clients[NPC_ID].x) {
+        return true;
+    }
+    else
+        return false;
+}
+
+bool is_in_range_attack_range(int Player_id, int NPC_ID)
+{
+    if (g_clients[Player_id].x == g_clients[NPC_ID].x && g_clients[Player_id].y == g_clients[NPC_ID].y) {
+        return true;
+    }
+    else if (g_clients[Player_id].x - 1 == g_clients[NPC_ID].x && g_clients[Player_id].y == g_clients[NPC_ID].y) {
+        return true;
+    }
+    else if (g_clients[Player_id].x + 1 == g_clients[NPC_ID].x && g_clients[Player_id].y == g_clients[NPC_ID].y) {
+        return true;
+    }
+    else if (g_clients[Player_id].y - 1 == g_clients[NPC_ID].y && g_clients[Player_id].x == g_clients[NPC_ID].x) {
+        return true;
+    }
+    else if (g_clients[Player_id].y + 1 == g_clients[NPC_ID].y && g_clients[Player_id].x == g_clients[NPC_ID].x) {
+        return true;
+    }
+    else if (g_clients[Player_id].y -1 == g_clients[NPC_ID].y && g_clients[Player_id].x -1 == g_clients[NPC_ID].x) {
+        return true;
+    }
+    else if (g_clients[Player_id].y - 1 == g_clients[NPC_ID].y && g_clients[Player_id].x + 1 == g_clients[NPC_ID].x) {
+        return true;
+    }
+    else if (g_clients[Player_id].y + 1 == g_clients[NPC_ID].y && g_clients[Player_id].x - 1 == g_clients[NPC_ID].x) {
+        return true;
+    }
+    else if (g_clients[Player_id].y + 1 == g_clients[NPC_ID].y && g_clients[Player_id].x + 1 == g_clients[NPC_ID].x) {
         return true;
     }
     else
@@ -980,7 +1013,7 @@ void npc_attack(int npc_id, int player_id)
     if (g_clients[npc_id].live == false) return;
     if (g_clients[npc_id].is_active == false) return;
 
-    if (is_in_attack_range(npc_id, player_id))
+    if (is_in_normal_attack_range(npc_id, player_id))
     {
         g_clients[npc_id].attack = true;
         g_clients[player_id].hp -= MONSTER_ATTACK_DAMAGE;
@@ -1004,7 +1037,7 @@ void npc_attack(int npc_id, int player_id)
 
     }
 
-    if (is_in_attack_range(npc_id, player_id)) {
+    if (is_in_normal_attack_range(npc_id, player_id)) {
         g_clients[npc_id].attack_1s_time = true;
         add_timer(npc_id, OP_NPC_ATTACK_1s, system_clock::now() + 1000ms, player_id);
     }
@@ -1031,12 +1064,47 @@ void update_player_exp(int id, int npc) {
     g_clients[id].exp += exp;
 }
 
-void process_attack(int id)
+void process_attack(int id, int attack_type)
 {
     if (true == g_clients[id].attack_1s_time) return;
 
     for (auto& npc : g_clients[id].view_list) {
-        if (true == is_in_attack_range(id, npc)) {
+        if (true == is_in_normal_attack_range(id, npc) && attack_type == AT_NORMAL) {
+            //해당 NPC HP 감소
+            g_clients[npc].hp -= PLAYER_ATTACK_DAMAGE;
+
+            //플레이어에게 NPC 상태 변화 알림
+            send_change_state_packet(id, npc, npc);
+
+            //NPC 공격 알림
+            if (g_clients[npc].attack == false) {
+                g_clients[npc].attack_1s_time = true;
+                add_timer(npc, OP_NPC_ATTACK_1s, system_clock::now() + 1000ms, id);
+            }
+            //npc_attack(npc, id);
+            //NPC가 죽으면
+            if (g_clients[npc].hp <= 0) {
+                g_clients[npc].hp = 0;
+
+                //NPC 별로 exp 수정 필요
+                update_player_exp(id, npc);
+
+                //EXP 업데이트 후 레벨 업데이트
+                set_player_level(id);
+
+                //플레이어의 뷰리스트에서 삭제하고 플레이어에게 leave 패킷 전송
+                //NPC 죽음 처리
+                npc_die(npc);
+                //플레이어의 State 변화와 어떤 몬스터 죽였는지 알려줌
+                send_change_state_packet(id, id, npc);
+            }
+            g_clients[npc].lua_lock.lock();
+            lua_getglobal(g_clients[npc].L, "set_hp");
+            lua_pushnumber(g_clients[npc].L, g_clients[npc].hp);
+            lua_pcall(g_clients[npc].L, 1, 1, 0);
+            g_clients[npc].lua_lock.unlock();
+        }
+        if (true == is_in_range_attack_range(id, npc) && attack_type == AT_RANGE) {
             //해당 NPC HP 감소
             g_clients[npc].hp -= PLAYER_ATTACK_DAMAGE;
 
@@ -2092,7 +2160,7 @@ void process_packet(int id)
     }
     case CS_ATTACK: {
         cs_packet_attack* p = reinterpret_cast<cs_packet_attack*>(g_clients[id].m_packet_start);
-        process_attack(id);
+        process_attack(id, p->attack_type);
         break;
     }
     case CS_LOGOUT: {
@@ -2558,7 +2626,7 @@ void random_move_npc(int id)
                     }
                     //cout << "x: " << x << "y: " << y << endl;
                     //공격 범위에 들어오면 공격
-                    if (is_in_attack_range(id, chase_player_id)) {
+                    if (is_in_normal_attack_range(id, chase_player_id)) {
                         if (g_clients[id].attack == false) {
                             g_clients[id].attack_1s_time = true;
                             add_timer(id, OP_NPC_ATTACK_1s, system_clock::now() + 1000ms, chase_player_id);

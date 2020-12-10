@@ -122,10 +122,12 @@ struct cs_packet_move {
 	char  direction;
 	int	  move_time;
 };
-
+constexpr int AT_NORMAL = 0;
+constexpr int AT_RANGE = 1;
 struct cs_packet_attack {
 	char  size;
 	char  type;
+	int attack_type;
 };
 
 struct cs_packet_chat {
