@@ -7,6 +7,9 @@
 #include <unordered_set>
 #include <chrono>
 #include <queue>
+#include <sqlext.h>
+#include <windows.h>
+#include <stdio.h> 
 #include "Default.h"
 #include "Astar.h"
 //시야에서 사라지는 경우 activation을 끊어야함 cas? 더이상 큐에 입력받지 못하도록
@@ -25,6 +28,7 @@ using namespace chrono;
 #pragma comment(lib, "Ws2_32.lib")
 #pragma comment(lib, "MSWSock.lib")
 #pragma comment(lib, "lua54.lib")
+#pragma comment(lib, "odbc32.lib")
 
 constexpr int MAX_BUFFER = 4096;
 
@@ -1562,8 +1566,13 @@ void process_packet(int id)
             send_login_fail_packet(id, id, (char*)"LOGIN FAIL : Another player is already logged in.");
             disconnect_client(id);
         }
-        else
-            send_login_ok(id);
+
+        if (!find_db(id)) {
+            insert_db(id, g_clients[id].x, g_clients[id].y, g_clients[id].hp, g_clients[id].level, g_clients[id].exp, g_clients[id].first_x, g_clients[id].first_y);
+        }
+
+        //로그인 오케이 패킷 전송
+        send_login_ok(id);
 
         g_clients[id].id = p->id;
 
@@ -2163,6 +2172,8 @@ void add_new_client(SOCKET ns)
 void disconnect_client(int id)
 {
     cout << "Player:" << id << " Disconnect" << endl;
+    //데이터 베이스 업데이트
+    update_db(id, g_clients[id].x, g_clients[id].y, g_clients[id].hp, g_clients[id].level, g_clients[id].exp, g_clients[id].first_x, g_clients[id].first_y);
     for (int i = 0; i < MAX_USER; ++i) {
         if (true == g_clients[i].in_use)
             if (i != id) {
@@ -2644,6 +2655,232 @@ void random_move_npc(int id)
     lua_pcall(g_clients[id].L, 0, 0, 0);
     g_clients[id].lua_lock.unlock();
 }
+
+
+//DataBase
+void show_error(SQLHANDLE hHandle, SQLSMALLINT hType, RETCODE RetCode)
+{
+    SQLSMALLINT iRec = 0;
+    SQLINTEGER iError;
+    WCHAR wszMessage[1000];
+    WCHAR wszState[SQL_SQLSTATE_SIZE + 1];
+    if (RetCode == SQL_INVALID_HANDLE) {
+        wcout << L"Invalid handle!\n";
+        return;
+    }
+    while (SQLGetDiagRec(hType, hHandle, ++iRec, wszState, &iError, wszMessage,
+        (SQLSMALLINT)(sizeof(wszMessage) / sizeof(WCHAR)), (SQLSMALLINT*)NULL) == SQL_SUCCESS) {
+        // Hide data truncated..
+        if (wcsncmp(wszState, L"01004", 5)) {
+            wcout << L"[" << wszState << L"]" << wszMessage << "(" << iError << ")" << endl;
+        }
+    }
+}
+
+bool find_db(int id)
+{
+    SQLHENV henv;
+    SQLHDBC hdbc;
+    SQLHSTMT hstmt = 0;
+    SQLRETURN retcode;
+    //데이터를 읽는 변수
+    SQLINTEGER ID, POS_X, POS_Y, HP, LEVEL, EXP, F_X, F_Y;
+    SQLLEN cbID = 0, cbPOS_X = 0, cbPOS_Y = 0, cbHP = 0, cbLEVEL = 0, cbEXP = 0, cbF_X = 0, cbF_Y = 0;
+
+    SQLWCHAR query[1024];
+    wsprintf(query, L"SELECT ID, POS_X, POS_Y, HP, P_LEVEL, EXP, F_POS_X, F_POS_Y FROM USER_TABLE WHERE ID= %d ", id);
+    bool no_data = true;
+    std::wcout.imbue(std::locale("korean"));
+
+    // Allocate environment handle  
+    retcode = SQLAllocHandle(SQL_HANDLE_ENV, SQL_NULL_HANDLE, &henv);
+
+    // Set the ODBC version environment attribute  
+    if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO) {
+        retcode = SQLSetEnvAttr(henv, SQL_ATTR_ODBC_VERSION, (SQLPOINTER*)SQL_OV_ODBC3, 0);
+
+        // Allocate connection handle  
+        if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO) {
+            retcode = SQLAllocHandle(SQL_HANDLE_DBC, henv, &hdbc);
+
+            // Set login timeout to 5 seconds  
+            if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO) {
+                SQLSetConnectAttr(hdbc, SQL_LOGIN_TIMEOUT, (SQLPOINTER)5, 0);
+
+                // Connect to data source  
+                retcode = SQLConnect(hdbc, (SQLWCHAR*)L"2020_fall", SQL_NTS, (SQLWCHAR*)NULL, 0, NULL, 0);
+
+                // Allocate statement handle  
+                if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO) {
+                    retcode = SQLAllocHandle(SQL_HANDLE_STMT, hdbc, &hstmt);
+
+                    retcode = SQLExecDirect(hstmt, (SQLWCHAR*)query, SQL_NTS);
+                    if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO) {
+                        // Bind columns 1, 2, and 3;
+                        retcode = SQLBindCol(hstmt, 1, SQL_C_LONG, &ID, 100, &cbID);
+                        retcode = SQLBindCol(hstmt, 2, SQL_C_LONG, &POS_X, 100, &cbPOS_X);
+                        retcode = SQLBindCol(hstmt, 3, SQL_C_LONG, &POS_Y, 100, &cbPOS_Y);
+                        retcode = SQLBindCol(hstmt, 4, SQL_C_LONG, &HP, 100, &cbHP);
+                        retcode = SQLBindCol(hstmt, 5, SQL_C_LONG, &LEVEL, 100, &cbLEVEL);
+                        retcode = SQLBindCol(hstmt, 6, SQL_C_LONG, &EXP, 100, &cbEXP);
+                        retcode = SQLBindCol(hstmt, 7, SQL_C_LONG, &F_X, 100, &cbF_X);
+                        retcode = SQLBindCol(hstmt, 8, SQL_C_LONG, &F_Y, 100, &cbF_Y);
+
+                        // Fetch and print each row of data. On an error, display a message and exit.  
+                        for (int i = 0; ; i++) {
+
+                            retcode = SQLFetch(hstmt);
+                            if (retcode == SQL_ERROR || retcode == SQL_SUCCESS_WITH_INFO)
+                                show_error(hstmt, SQL_HANDLE_STMT, retcode);
+                            if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO)
+                            {
+                                no_data = false;
+                                g_clients[ID].x = POS_X;
+                                g_clients[ID].y = POS_Y;
+                                g_clients[ID].hp = HP;
+                                g_clients[ID].level = LEVEL;
+                                g_clients[ID].exp = EXP;
+                                g_clients[ID].first_x = F_X;
+                                g_clients[ID].first_y = F_Y;
+                            }
+                            else
+                                break;
+                        }
+
+                    }
+
+                    // Process data  
+                    if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO) {
+                        SQLCancel(hstmt);
+                        SQLFreeHandle(SQL_HANDLE_STMT, hstmt);
+                    }
+
+                    SQLDisconnect(hdbc);
+                }
+
+                SQLFreeHandle(SQL_HANDLE_DBC, hdbc);
+            }
+        }
+        SQLFreeHandle(SQL_HANDLE_ENV, henv);
+    }
+    if (no_data) {
+        cout << "데이터 없음" << endl;
+        return false;
+    }
+    else {
+        cout << "데이터 있음" << endl;
+        return true;
+    }
+}
+
+void insert_db(int id, int x, int y, int hp, int level, int exp, int f_x, int f_y) {
+    SQLHENV henv;
+    SQLHDBC hdbc;
+    SQLHSTMT hstmt = 0;
+    SQLRETURN retcode;
+    //데이터를 읽는 변수
+    SQLWCHAR query[1024];
+
+    wsprintf(query, L"INSERT INTO USER_TABLE (ID, POS_X, POS_Y, HP, P_LEVEL, EXP, F_POS_X, F_POS_Y) VALUES (%d, %d, %d, %d, %d, %d, %d ,%d)", id, x, y, hp, level, exp, f_x, f_y);
+    std::wcout.imbue(std::locale("korean"));
+
+    // Allocate environment handle  
+    retcode = SQLAllocHandle(SQL_HANDLE_ENV, SQL_NULL_HANDLE, &henv);
+
+    // Set the ODBC version environment attribute  
+    if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO) {
+        retcode = SQLSetEnvAttr(henv, SQL_ATTR_ODBC_VERSION, (SQLPOINTER*)SQL_OV_ODBC3, 0);
+
+        // Allocate connection handle  
+        if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO) {
+            retcode = SQLAllocHandle(SQL_HANDLE_DBC, henv, &hdbc);
+
+            // Set login timeout to 5 seconds  
+            if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO) {
+                SQLSetConnectAttr(hdbc, SQL_LOGIN_TIMEOUT, (SQLPOINTER)5, 0);
+
+                // Connect to data source  
+                retcode = SQLConnect(hdbc, (SQLWCHAR*)L"2020_fall", SQL_NTS, (SQLWCHAR*)NULL, 0, NULL, 0);
+
+                // Allocate statement handle  
+                if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO) {
+                    retcode = SQLAllocHandle(SQL_HANDLE_STMT, hdbc, &hstmt);
+
+                    retcode = SQLExecDirect(hstmt, (SQLWCHAR*)query, SQL_NTS);
+                    show_error(hstmt, SQL_HANDLE_STMT, retcode);
+                    if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO) {
+                    }
+
+                    // Process data  
+                    if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO) {
+                        SQLCancel(hstmt);
+                        SQLFreeHandle(SQL_HANDLE_STMT, hstmt);
+                    }
+
+                    SQLDisconnect(hdbc);
+                }
+
+                SQLFreeHandle(SQL_HANDLE_DBC, hdbc);
+            }
+        }
+        SQLFreeHandle(SQL_HANDLE_ENV, henv);
+    }
+}
+
+void update_db(int id, int x, int y, int hp, int level, int exp, int f_x, int f_y) {
+    SQLHENV henv;
+    SQLHDBC hdbc;
+    SQLHSTMT hstmt = 0;
+    SQLRETURN retcode;
+    //데이터를 읽는 변수
+    SQLWCHAR query[1024];
+
+    wsprintf(query, L"UPDATE USER_TABLE SET POS_X=%d, POS_Y=%d, HP=%d, P_LEVEL=%d, EXP=%d, F_POS_X=%d, F_POS_Y=%d WHERE ID = %d", x, y, hp, level, exp, f_x, f_y, id);
+    std::wcout.imbue(std::locale("korean"));
+
+    // Allocate environment handle  
+    retcode = SQLAllocHandle(SQL_HANDLE_ENV, SQL_NULL_HANDLE, &henv);
+
+    // Set the ODBC version environment attribute  
+    if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO) {
+        retcode = SQLSetEnvAttr(henv, SQL_ATTR_ODBC_VERSION, (SQLPOINTER*)SQL_OV_ODBC3, 0);
+
+        // Allocate connection handle  
+        if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO) {
+            retcode = SQLAllocHandle(SQL_HANDLE_DBC, henv, &hdbc);
+
+            // Set login timeout to 5 seconds  
+            if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO) {
+                SQLSetConnectAttr(hdbc, SQL_LOGIN_TIMEOUT, (SQLPOINTER)5, 0);
+
+                // Connect to data source  
+                retcode = SQLConnect(hdbc, (SQLWCHAR*)L"2020_fall", SQL_NTS, (SQLWCHAR*)NULL, 0, NULL, 0);
+
+                // Allocate statement handle  
+                if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO) {
+                    retcode = SQLAllocHandle(SQL_HANDLE_STMT, hdbc, &hstmt);
+
+                    retcode = SQLExecDirect(hstmt, (SQLWCHAR*)query, SQL_NTS);
+                    show_error(hstmt, SQL_HANDLE_STMT, retcode);
+                    if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO) {
+                    }
+
+                    // Process data  
+                    if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO) {
+                        SQLCancel(hstmt);
+                        SQLFreeHandle(SQL_HANDLE_STMT, hstmt);
+                    }
+
+                    SQLDisconnect(hdbc);
+                }
+
+                SQLFreeHandle(SQL_HANDLE_DBC, hdbc);
+            }
+        }
+        SQLFreeHandle(SQL_HANDLE_ENV, henv);
+    }
+}
+
 
 int main()
 {
