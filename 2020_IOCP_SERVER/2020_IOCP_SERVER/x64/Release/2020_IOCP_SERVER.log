@@ -1,19 +1,19 @@
 ﻿  iocp_server.cpp
-C:\Users\DongNyeonKim\Desktop\3학년 2학기\게임 서버 프로그래밍\GSP_TermProject_2016182007_김동년\2020_IOCP_SERVER\2020_IOCP_SERVER\iocp_server.cpp(2297,17): warning C4244: '초기화 중': 'lua_Integer'에서 'int'(으)로 변환하면서 데이터가 손실될 수 있습니다.
-C:\Users\DongNyeonKim\Desktop\3학년 2학기\게임 서버 프로그래밍\GSP_TermProject_2016182007_김동년\2020_IOCP_SERVER\2020_IOCP_SERVER\iocp_server.cpp(2306,17): warning C4244: '초기화 중': 'lua_Integer'에서 'int'(으)로 변환하면서 데이터가 손실될 수 있습니다.
-C:\Users\DongNyeonKim\Desktop\3학년 2학기\게임 서버 프로그래밍\GSP_TermProject_2016182007_김동년\2020_IOCP_SERVER\2020_IOCP_SERVER\iocp_server.cpp(2463,11): warning C4244: '초기화 중': 'lua_Number'에서 'int'(으)로 변환하면서 데이터가 손실될 수 있습니다.
-C:\Users\DongNyeonKim\Desktop\3학년 2학기\게임 서버 프로그래밍\GSP_TermProject_2016182007_김동년\2020_IOCP_SERVER\2020_IOCP_SERVER\iocp_server.cpp(2465,11): warning C4244: '초기화 중': 'lua_Number'에서 'int'(으)로 변환하면서 데이터가 손실될 수 있습니다.
-C:\Users\DongNyeonKim\Desktop\3학년 2학기\게임 서버 프로그래밍\GSP_TermProject_2016182007_김동년\2020_IOCP_SERVER\2020_IOCP_SERVER\iocp_server.cpp(2743,51): warning C4244: '=': 'SQLINTEGER'에서 'short'(으)로 변환하면서 데이터가 손실될 수 있습니다.
-C:\Users\DongNyeonKim\Desktop\3학년 2학기\게임 서버 프로그래밍\GSP_TermProject_2016182007_김동년\2020_IOCP_SERVER\2020_IOCP_SERVER\iocp_server.cpp(2744,51): warning C4244: '=': 'SQLINTEGER'에서 'short'(으)로 변환하면서 데이터가 손실될 수 있습니다.
-C:\Users\DongNyeonKim\Desktop\3학년 2학기\게임 서버 프로그래밍\GSP_TermProject_2016182007_김동년\2020_IOCP_SERVER\2020_IOCP_SERVER\iocp_server.cpp(2745,52): warning C4244: '=': 'SQLINTEGER'에서 'short'(으)로 변환하면서 데이터가 손실될 수 있습니다.
-C:\Users\DongNyeonKim\Desktop\3학년 2학기\게임 서버 프로그래밍\GSP_TermProject_2016182007_김동년\2020_IOCP_SERVER\2020_IOCP_SERVER\iocp_server.cpp(2746,55): warning C4244: '=': 'SQLINTEGER'에서 'short'(으)로 변환하면서 데이터가 손실될 수 있습니다.
-C:\Users\DongNyeonKim\Desktop\3학년 2학기\게임 서버 프로그래밍\GSP_TermProject_2016182007_김동년\2020_IOCP_SERVER\2020_IOCP_SERVER\iocp_server.cpp(2747,53): warning C4244: '=': 'SQLINTEGER'에서 'short'(으)로 변환하면서 데이터가 손실될 수 있습니다.
-C:\Users\DongNyeonKim\Desktop\3학년 2학기\게임 서버 프로그래밍\GSP_TermProject_2016182007_김동년\2020_IOCP_SERVER\2020_IOCP_SERVER\iocp_server.cpp(2748,57): warning C4244: '=': 'SQLINTEGER'에서 'short'(으)로 변환하면서 데이터가 손실될 수 있습니다.
-C:\Users\DongNyeonKim\Desktop\3학년 2학기\게임 서버 프로그래밍\GSP_TermProject_2016182007_김동년\2020_IOCP_SERVER\2020_IOCP_SERVER\iocp_server.cpp(2749,57): warning C4244: '=': 'SQLINTEGER'에서 'short'(으)로 변환하면서 데이터가 손실될 수 있습니다.
+C:\Users\DongNyeonKim\Desktop\3학년 2학기\게임 서버 프로그래밍\GSP_TermProject_2016182007_김동년\2020_IOCP_SERVER\2020_IOCP_SERVER\iocp_server.cpp(2327,17): warning C4244: '초기화 중': 'lua_Integer'에서 'int'(으)로 변환하면서 데이터가 손실될 수 있습니다.
+C:\Users\DongNyeonKim\Desktop\3학년 2학기\게임 서버 프로그래밍\GSP_TermProject_2016182007_김동년\2020_IOCP_SERVER\2020_IOCP_SERVER\iocp_server.cpp(2336,17): warning C4244: '초기화 중': 'lua_Integer'에서 'int'(으)로 변환하면서 데이터가 손실될 수 있습니다.
+C:\Users\DongNyeonKim\Desktop\3학년 2학기\게임 서버 프로그래밍\GSP_TermProject_2016182007_김동년\2020_IOCP_SERVER\2020_IOCP_SERVER\iocp_server.cpp(2493,11): warning C4244: '초기화 중': 'lua_Number'에서 'int'(으)로 변환하면서 데이터가 손실될 수 있습니다.
+C:\Users\DongNyeonKim\Desktop\3학년 2학기\게임 서버 프로그래밍\GSP_TermProject_2016182007_김동년\2020_IOCP_SERVER\2020_IOCP_SERVER\iocp_server.cpp(2495,11): warning C4244: '초기화 중': 'lua_Number'에서 'int'(으)로 변환하면서 데이터가 손실될 수 있습니다.
+C:\Users\DongNyeonKim\Desktop\3학년 2학기\게임 서버 프로그래밍\GSP_TermProject_2016182007_김동년\2020_IOCP_SERVER\2020_IOCP_SERVER\iocp_server.cpp(2772,51): warning C4244: '=': 'SQLINTEGER'에서 'short'(으)로 변환하면서 데이터가 손실될 수 있습니다.
+C:\Users\DongNyeonKim\Desktop\3학년 2학기\게임 서버 프로그래밍\GSP_TermProject_2016182007_김동년\2020_IOCP_SERVER\2020_IOCP_SERVER\iocp_server.cpp(2773,51): warning C4244: '=': 'SQLINTEGER'에서 'short'(으)로 변환하면서 데이터가 손실될 수 있습니다.
+C:\Users\DongNyeonKim\Desktop\3학년 2학기\게임 서버 프로그래밍\GSP_TermProject_2016182007_김동년\2020_IOCP_SERVER\2020_IOCP_SERVER\iocp_server.cpp(2774,52): warning C4244: '=': 'SQLINTEGER'에서 'short'(으)로 변환하면서 데이터가 손실될 수 있습니다.
+C:\Users\DongNyeonKim\Desktop\3학년 2학기\게임 서버 프로그래밍\GSP_TermProject_2016182007_김동년\2020_IOCP_SERVER\2020_IOCP_SERVER\iocp_server.cpp(2775,55): warning C4244: '=': 'SQLINTEGER'에서 'short'(으)로 변환하면서 데이터가 손실될 수 있습니다.
+C:\Users\DongNyeonKim\Desktop\3학년 2학기\게임 서버 프로그래밍\GSP_TermProject_2016182007_김동년\2020_IOCP_SERVER\2020_IOCP_SERVER\iocp_server.cpp(2776,53): warning C4244: '=': 'SQLINTEGER'에서 'short'(으)로 변환하면서 데이터가 손실될 수 있습니다.
+C:\Users\DongNyeonKim\Desktop\3학년 2학기\게임 서버 프로그래밍\GSP_TermProject_2016182007_김동년\2020_IOCP_SERVER\2020_IOCP_SERVER\iocp_server.cpp(2777,57): warning C4244: '=': 'SQLINTEGER'에서 'short'(으)로 변환하면서 데이터가 손실될 수 있습니다.
+C:\Users\DongNyeonKim\Desktop\3학년 2학기\게임 서버 프로그래밍\GSP_TermProject_2016182007_김동년\2020_IOCP_SERVER\2020_IOCP_SERVER\iocp_server.cpp(2778,57): warning C4244: '=': 'SQLINTEGER'에서 'short'(으)로 변환하면서 데이터가 손실될 수 있습니다.
 LINK : warning LNK4098: 'LIBCMT' defaultlib가 다른 라이브러리와 충돌합니다. /NODEFAULTLIB:library를 사용하십시오.
   코드를 생성하고 있습니다.
-  45 of 776 functions ( 5.8%) were compiled, the rest were copied from previous compilation.
+  45 of 777 functions ( 5.8%) were compiled, the rest were copied from previous compilation.
     0 functions were new in current compilation
-    15 functions had inline decision re-evaluated but remain unchanged
+    21 functions had inline decision re-evaluated but remain unchanged
   코드를 생성했습니다.
   2020_IOCP_SERVER.vcxproj -> C:\Users\DongNyeonKim\Desktop\3학년 2학기\게임 서버 프로그래밍\GSP_TermProject_2016182007_김동년\2020_IOCP_SERVER\x64\Release\2020_IOCP_SERVER.exe

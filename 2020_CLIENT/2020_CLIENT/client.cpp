@@ -143,11 +143,15 @@ OBJECT white_tile;
 OBJECT black_tile;
 //장애물
 OBJECT obtacle_tile;
+OBJECT item_icon;
 
 sf::Texture* board;
 sf::Texture* pieces;
 //장애물
 sf::Texture* obtacle;
+
+//아이템
+sf::Texture* item;
 
 bool is_npc(int p1)
 {
@@ -159,6 +163,7 @@ void client_initialize()
 	board = new sf::Texture;
 	pieces = new sf::Texture;
 	obtacle = new sf::Texture;
+	item = new sf::Texture;
 	if (false == g_font.loadFromFile("cour.ttf")) {
 		cout << "Font Loading Error!\n";
 		while (true);
@@ -166,9 +171,11 @@ void client_initialize()
 	board->loadFromFile("chessmap.bmp");
 	pieces->loadFromFile("chess2.png");
 	obtacle->loadFromFile("obtimage.bmp");
+	item->loadFromFile("item.png");
 	white_tile = OBJECT{ *board, 5, 5, TILE_WIDTH, TILE_WIDTH };
 	black_tile = OBJECT{ *board, 69, 5, TILE_WIDTH, TILE_WIDTH };
 	obtacle_tile = OBJECT{ *obtacle, 5, 5, TILE_WIDTH, TILE_WIDTH };
+	item_icon = OBJECT{ *item, 0, 0, 64, 64 };
 	avatar = OBJECT{ *pieces, 128, 0, 64, 64 };
 	avatar.move(0, 0);
 }
@@ -273,7 +280,6 @@ void ProcessPacket(char* ptr)
 		}
 	}
 	break;
-
 	case SC_PACKET_LEAVE:
 	{
 		sc_packet_leave* my_packet = reinterpret_cast<sc_packet_leave*>(ptr);
@@ -372,6 +378,13 @@ void ProcessPacket(char* ptr)
 		//큐가 5개 이상일 경우 POP
 		if (chatqueue.size() > 5)
 			chatqueue.pop();
+	}
+	break;
+	case SC_PACKET_ITEM_POSI:
+	{
+		sc_packet_item_posi* my_packet = reinterpret_cast<sc_packet_item_posi*>(ptr);
+		items[my_packet->id].x = my_packet->x;
+		items[my_packet->id].y = my_packet->y;
 	}
 	break;
 	default:
@@ -487,6 +500,11 @@ void client_main()
 		obtacle_tile.a_draw();
 	}
 
+	//아이템 출력
+	for (int i = 0; i < NUM_ITEM; ++i) {
+		item_icon.a_move(TILE_WIDTH * (items[i].x - g_left_x) + 7, TILE_WIDTH * (items[i].y - g_top_y) + 7);
+		item_icon.a_draw();
+	}
 
 	avatar.draw();
 	//	for (auto &pl : players) pl.draw();
@@ -632,6 +650,7 @@ void send_chatting_packet()
 		CloseHandle(hTread);
 	}
 }
+
 int main()
 {
 	cout << "Player ID를 입력하세요(숫자로만 입력):";

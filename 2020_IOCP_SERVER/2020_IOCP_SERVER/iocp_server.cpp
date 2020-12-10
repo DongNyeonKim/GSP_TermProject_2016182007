@@ -138,7 +138,6 @@ void add_timer(int obj_id, int ev_type, system_clock::time_point t, int target_i
     timer_l.unlock();
 }
 
-
 void time_worker()
 {
     while (true) {
@@ -203,7 +202,7 @@ void wake_up_npc(int id)
     bool b = false;
     if (true == g_clients[id].is_active.compare_exchange_strong(b, true))
     {
-        add_timer(id, OP_RANDOM_MOVE, system_clock::now() + 1s, 0);
+        add_timer(id, OP_RANDOM_MOVE, system_clock::now() + 1000ms, 0);
     }
 }
 
@@ -285,6 +284,18 @@ void send_chat_packet(int to_client, int id, char* mess)
     send_packet(to_client, &p);
 }
 
+
+void send_item_posi_packet(int to_client, int i)
+{
+    sc_packet_item_posi p;
+    p.size = sizeof(p);
+    p.type = SC_PACKET_ITEM_POSI;
+    p.id = i;
+    p.x = items[i].x;
+    p.y = items[i].y;
+    send_packet(to_client, &p);
+}
+
 void send_login_ok(int id)
 {
     sc_packet_login_ok p;
@@ -330,7 +341,7 @@ void send_change_state_packet(int player_id, int id, int npc)
     p.hp = g_clients[id].hp;
     p.exp = g_clients[id].exp;
     p.level = g_clients[id].level;
-    strcpy_s(p.npc_name, g_clients[id].name);
+    strcpy_s(p.npc_name, g_clients[npc].name);
 
     send_packet(player_id, &p);
 }
@@ -470,7 +481,7 @@ void npc_die(int npc_id)
 {
     g_clients[npc_id].is_active = false;
     g_clients[npc_id].live = false;
-
+    g_clients[npc_id].attack = false;
     //해당 NPC 섹터에서 삭제
     sec1.erase(std::remove(sec1.begin(), sec1.end(), npc_id), sec1.end());
     sec2.erase(std::remove(sec2.begin(), sec2.end(), npc_id), sec2.end());
@@ -992,14 +1003,14 @@ void npc_attack(int npc_id, int player_id)
         }
 
     }
-    //노티파이랑 랜덤 무브 참고해서 만들고
-    //에드 타이머는 플레이어가 가까이 있으면 가고 없으면 제끼라웃
+
     if (is_in_attack_range(npc_id, player_id)) {
         g_clients[npc_id].attack_1s_time = true;
         add_timer(npc_id, OP_NPC_ATTACK_1s, system_clock::now() + 1000ms, player_id);
     }
     else {
         g_clients[npc_id].attack = false;
+        g_clients[npc_id].is_active = false;
         wake_up_npc(npc_id);
     }
 
@@ -1092,6 +1103,25 @@ void process_move(int id, char dir)
     if (!collision_obtacle) {
         g_clients[id].x = x;
         g_clients[id].y = y;
+    }
+
+    //아이템과 충돌처리
+    for (int i = 0; i < NUM_ITEM; i++)
+    {
+        if (items[i].x == g_clients[id].x && items[i].y == g_clients[id].y)
+        {
+            //플레이어 체력 업데이트
+            g_clients[id].hp += 50;
+            //상태 변화 알림
+            send_change_state_packet(id, id, 0);
+            //아이템 위치 변화
+            items[i].x = rand() % (WORLD_WIDTH-50)+20;
+            items[i].y = rand() % (WORLD_HEIGHT-50)+20;
+            //아이템 위치 전송
+            send_item_posi_packet(id, i);
+
+            break;
+        }
     }
 
     if (0 <= g_clients[id].x && g_clients[id].x <= 400 && 0 <= g_clients[id].y && g_clients[id].y <= 400) {
@@ -1544,7 +1574,7 @@ void process_move(int id, char dir)
     }
 
     g_clients[id].move_1s_time = true;
-    add_timer(id, OP_PLAYER_MOVE_1s, system_clock::now() + 1000ms, 0);
+    add_timer(id, OP_PLAYER_MOVE_1s, system_clock::now() + 10ms, 0);
 
 }
 
@@ -2660,7 +2690,6 @@ void random_move_npc(int id)
     lua_pcall(g_clients[id].L, 0, 0, 0);
     g_clients[id].lua_lock.unlock();
 }
-
 
 //DataBase
 void show_error(SQLHANDLE hHandle, SQLSMALLINT hType, RETCODE RetCode)

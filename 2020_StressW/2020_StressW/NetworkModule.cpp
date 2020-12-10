@@ -169,6 +169,7 @@ void ProcessPacket(int ci, unsigned char packet[])
 	case SC_PACKET_CHAT: break;
 	case SC_PACKET_LOGIN_FAIL: break;
 	case SC_PACKET_STAT_CHANGE: break;
+	case SC_PACKET_ITEM_POSI: break;
 	default: MessageBox(hWnd, L"Unknown Packet Type", L"ERROR", 0);
 		while (true);
 	}
