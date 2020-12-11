@@ -12,8 +12,7 @@
 #include <stdio.h> 
 #include "Default.h"
 #include "Astar.h"
-//시야에서 사라지는 경우 activation을 끊어야함 cas? 더이상 큐에 입력받지 못하도록
-//timer가 아니라 work thread 에서 실행되도록 행야함 post큐
+
 extern "C" {
 #include "include/lua.h"
 #include "include/lauxlib.h"
@@ -951,7 +950,7 @@ void process_attack(int id, int attack_type)
                 g_clients[npc].attack_1s_time = true;
                 add_timer(npc, OP_NPC_ATTACK_1s, system_clock::now() + 1000ms, id);
             }
-            //npc_attack(npc, id);
+
             //NPC가 죽으면
             if (g_clients[npc].hp <= 0) {
                 g_clients[npc].hp = 0;
@@ -986,7 +985,6 @@ void process_attack(int id, int attack_type)
                 g_clients[npc].attack_1s_time = true;
                 add_timer(npc, OP_NPC_ATTACK_1s, system_clock::now() + 1000ms, id);
             }
-            //npc_attack(npc, id);
             //NPC가 죽으면
             if (g_clients[npc].hp <= 0) {
                 g_clients[npc].hp = 0;
@@ -1447,17 +1445,6 @@ void process_move(int id, char dir)
     else
         cout << "Sector Get Error" << endl;
 
-    //이동후 NPC 집어넣기
-    //for (int i = MAX_USER; i < MAX_USER + NUM_NPC; ++i) {
-    //   if (true == is_near(id, i)) {
-    //      new_viewlist.insert(i);
-    //      wake_up_npc(i);
-    //   }
-    //   else
-    //      g_clients[id].is_active = false;
-    //}
-
-
 
     for (int ob : new_viewlist) {
         if (0 == old_viewlist.count(ob)) {
@@ -1528,7 +1515,6 @@ void add_new_client(SOCKET ns)
         closesocket(ns);
     }
     else {
-        //cout << "New Client [" << i << "] Accepted" << endl;
         g_clients[i].c_lock.lock();
         g_clients[i].in_use = true;
         g_clients[i].m_sock = ns;
@@ -1568,7 +1554,6 @@ void add_new_client(SOCKET ns)
 //연결 종료
 void disconnect_client(int id)
 {
-    cout << "Player:" << id << " Disconnect" << endl;
     //데이터 베이스 업데이트
     update_db(g_clients[id].id, g_clients[id].x, g_clients[id].y, g_clients[id].hp, g_clients[id].level, g_clients[id].exp, g_clients[id].first_x, g_clients[id].first_y);
     for (int i = 0; i < MAX_USER; ++i) {
@@ -1600,7 +1585,6 @@ void disconnect_client(int id)
     g_clients[id].exp = 0;
     g_clients[id].c_lock.unlock();
 }
-
 
 
 //NPC 관련 함수
@@ -1742,8 +1726,6 @@ void random_move_npc(int id)
     lua_pop(g_clients[id].L, 2);
     g_clients[id].lua_lock.unlock();
 
-    //int  x = g_clients[id].x;
-    //int  y = g_clients[id].y;
 
     //움직이는 NPC 범위 내 이동
     if (!is_in_moverange(x, y, g_clients[id].first_x, g_clients[id].first_y, 20))
@@ -1787,13 +1769,12 @@ void random_move_npc(int id)
             if (g_clients[chase_player_id].in_use == true) {
                 if (!same_position(g_clients[id].x, g_clients[id].y, g_clients[chase_player_id].x, g_clients[chase_player_id].y))
                 {
-                    //cout << g_clients[id].x << "    " << g_clients[id].y << endl;
-                    //cout << g_clients[chase_player_id].x << "   " << g_clients[chase_player_id].y << endl;
+
                     Astar::Coordinate A(g_clients[id].x, g_clients[id].y);
                     Astar::Coordinate B(g_clients[chase_player_id].x, g_clients[chase_player_id].y);
 
                     Astar astar(A, B);
-                    //cout << astar.GetPos(2).x << "   " << astar.GetPos(2).y << endl;
+
                     int x1, y1;
                     x1 = astar.GetPos(2).x;
                     y1 = astar.GetPos(2).y;
@@ -1802,7 +1783,7 @@ void random_move_npc(int id)
                         x = x1;
                         y = y1;
                     }
-                    //cout << "x: " << x << "y: " << y << endl;
+
                     //공격 범위에 들어오면 공격
                     if (is_in_normal_attack_range(id, chase_player_id)) {
                         if (g_clients[id].attack == false) {
@@ -1812,7 +1793,6 @@ void random_move_npc(int id)
                     }
                 }
                 else {
-                    //cout << "same posi" << endl;
                     x = g_clients[id].x;
                     y = g_clients[id].y;
                     //어그로 몬스터가 플레이어 좌표와 같아지면 공격
@@ -2108,7 +2088,6 @@ void process_packet(int id)
         }
 
         g_clients[id].id = p->id;
-
         if (!find_db(id)) {
             //새로운 데이터 포기화
             g_clients[id].x = rand() % WORLD_WIDTH;
@@ -2567,28 +2546,6 @@ void process_packet(int id)
         else
             cout << "Sector Get Error" << endl;
 
-        //for (int i = 0; i< MAX_USER; ++i)
-        //   if (true == g_clients[i].in_use)
-        //      if (id != i) {
-        //         if (false == is_near(i, id)) continue;
-        //         if (0 == g_clients[i].view_list.count(id)) {
-        //            g_clients[i].view_list.insert(id);
-        //            send_enter_packet(i, id);
-        //         }
-        //         if (0 == g_clients[id].view_list.count(i)) {
-        //            g_clients[id].view_list.insert(i);
-        //            send_enter_packet(id, i);
-        //         }
-        //      }
-
-        //플레이어 주변에 있는 NPC들을 viewlist에 추가
-        //for (int i = MAX_USER; i < MAX_USER + NUM_NPC; ++i)
-        //{
-        //   if (false == is_near(id, i)) continue;
-        //   g_clients[id].view_list.insert(i);
-        //   send_enter_packet(id, i);
-        //   wake_up_npc(i);
-        //}
         break;
     }
     case CS_MOVE: {
@@ -3033,14 +2990,12 @@ int main()
     //NPC 초기화
     initialize_NPC();
 
-    //thread ai_thread{ npc_ai_thread };
     thread timer_thread{ time_worker };
     vector <thread> worker_threads;
     for (int i = 0; i < 6; ++i)
         worker_threads.emplace_back(worker_thread);
     for (auto& th : worker_threads)
         th.join();
-    //ai_thread.join();
     timer_thread.join();
 
     closesocket(g_lSocket);

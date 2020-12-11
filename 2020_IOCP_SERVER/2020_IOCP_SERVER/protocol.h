@@ -10,7 +10,7 @@ constexpr int MAX_STR_LEN = 100;
 constexpr int VIEW_LIMIT = 7;
 
 
-constexpr int NUM_NPC = 1000;
+constexpr int NUM_NPC = 100000;
 constexpr int NUM_OBTACLE = 2000;
 constexpr int NUM_ITEM = 2000;
 #pragma pack (push, 1)
@@ -31,9 +31,11 @@ constexpr char CS_CHAT = 3;
 constexpr char CS_LOGOUT = 4;
 constexpr char CS_TELEORT = 5;
 
-
+//플레이어 공격 데미지
 const short PLAYER_ATTACK_DAMAGE = 50;
+//몬스터 공격 데미지
 const short MONSTER_ATTACK_DAMAGE = 30;
+//플레이어 최대 HP
 const short PLAYER_MAX_HP = 2000;
 
 
