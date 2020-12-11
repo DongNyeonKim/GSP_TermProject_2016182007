@@ -327,7 +327,7 @@ void ProcessPacket(char* ptr)
 
 				string temp = "Defeated The Monster ";
 				temp += my_packet->npc_name;
-				temp += " AND Gained ";
+				temp += " And Gained ";
 				temp += to_string((my_packet->exp) - (avatar.exp));
 				temp += "Exp.";
 
@@ -338,7 +338,7 @@ void ProcessPacket(char* ptr)
 			else if (my_packet->hp > avatar.hp)
 			{
 
-				string temp = "Warrior recoverd ";
+				string temp = "Warrior Recoverd ";
 				temp += to_string((my_packet->hp) - (avatar.hp));
 				temp += "Hp.";
 
@@ -352,7 +352,7 @@ void ProcessPacket(char* ptr)
 			{
 				string temp = "Monster ";
 				temp += my_packet->npc_name;
-				temp += " Attack Caused";
+				temp += " Attack Caused ";
 				temp += to_string(MONSTER_ATTACK_DAMAGE);
 				temp += "Damage.";
 
@@ -366,7 +366,7 @@ void ProcessPacket(char* ptr)
 			npcs[my_packet->id].set_hp(my_packet->hp);
 			string temp = "Warrior Attack Monster ";
 			temp += my_packet->npc_name;
-			temp += " Inclicting ";
+			temp += " Inflicting ";
 			temp += to_string(PLAYER_ATTACK_DAMAGE);
 			temp += "Damage.";
 

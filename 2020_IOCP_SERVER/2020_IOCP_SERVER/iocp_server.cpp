@@ -91,6 +91,7 @@ struct client_info {
 };
 
 mutex id_lock;
+
 client_info g_clients[MAX_USER + NUM_NPC];
 
 //4분할 섹터
@@ -117,6 +118,7 @@ struct event_type {
 };
 
 priority_queue<event_type> timer_queue;
+
 mutex timer_l;
 
 void random_move_npc(int id);
@@ -124,12 +126,30 @@ void disconnect_client(int id);
 bool find_db(int id);
 void insert_db(int id, int x, int y, int hp, int level, int exp, int f_x, int f_y);
 void update_db(int id, int x, int y, int hp, int level, int exp, int f_x, int f_y);
+int API_get_x(lua_State* L);
+int API_get_y(lua_State* L);
+int API_SendMessage(lua_State* L);
+bool is_npc(int p1);
+void npc_die(int npc_id);
+void wake_up_npc(int id);
 
-bool CAS(volatile bool* addr, bool expected, bool new_val)
+
+void error_display(const char* msg, int err_no)
 {
-    return atomic_compare_exchange_strong(reinterpret_cast<volatile atomic_bool*>(addr), &expected, new_val);
+    WCHAR* lpMsgBuf;
+    FormatMessage(
+        FORMAT_MESSAGE_ALLOCATE_BUFFER |
+        FORMAT_MESSAGE_FROM_SYSTEM,
+        NULL, err_no,
+        MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+        (LPTSTR)&lpMsgBuf, 0, NULL);
+    std::cout << msg;
+    std::wcout << L"에러 " << lpMsgBuf << std::endl;
+    while (true);
+    LocalFree(lpMsgBuf);
 }
 
+//타이머 관련 함수
 void add_timer(int obj_id, int ev_type, system_clock::time_point t, int target_id)
 {
     timer_l.lock();
@@ -197,35 +217,9 @@ void time_worker()
     }
 }
 
-void wake_up_npc(int id)
-{
-    bool b = false;
-    if (true == g_clients[id].is_active.compare_exchange_strong(b, true))
-    {
-        add_timer(id, OP_RANDOM_MOVE, system_clock::now() + 1000ms, 0);
-    }
-}
 
-void error_display(const char* msg, int err_no)
-{
-    WCHAR* lpMsgBuf;
-    FormatMessage(
-        FORMAT_MESSAGE_ALLOCATE_BUFFER |
-        FORMAT_MESSAGE_FROM_SYSTEM,
-        NULL, err_no,
-        MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-        (LPTSTR)&lpMsgBuf, 0, NULL);
-    std::cout << msg;
-    std::wcout << L"에러 " << lpMsgBuf << std::endl;
-    while (true);
-    LocalFree(lpMsgBuf);
-}
 
-bool is_npc(int p1)
-{
-    return p1 >= MAX_USER;
-}
-
+//거리 판단 함수
 bool is_near(int p1, int p2)
 {
     int dist = (g_clients[p1].x - g_clients[p2].x) * (g_clients[p1].x - g_clients[p2].x);
@@ -258,6 +252,69 @@ int get_moverange(short x, short y, short n_x, short n_y)
     return dist;
 }
 
+bool is_in_normal_attack_range(int Player_id, int NPC_ID)
+{
+    if (g_clients[Player_id].x == g_clients[NPC_ID].x && g_clients[Player_id].y == g_clients[NPC_ID].y) {
+        return true;
+    }
+    else if (g_clients[Player_id].x - 1 == g_clients[NPC_ID].x && g_clients[Player_id].y == g_clients[NPC_ID].y) {
+        return true;
+    }
+    else if (g_clients[Player_id].x + 1 == g_clients[NPC_ID].x && g_clients[Player_id].y == g_clients[NPC_ID].y) {
+        return true;
+    }
+    else if (g_clients[Player_id].y - 1 == g_clients[NPC_ID].y && g_clients[Player_id].x == g_clients[NPC_ID].x) {
+        return true;
+    }
+    else if (g_clients[Player_id].y + 1 == g_clients[NPC_ID].y && g_clients[Player_id].x == g_clients[NPC_ID].x) {
+        return true;
+    }
+    else
+        return false;
+}
+
+bool is_in_range_attack_range(int Player_id, int NPC_ID)
+{
+    if (g_clients[Player_id].x == g_clients[NPC_ID].x && g_clients[Player_id].y == g_clients[NPC_ID].y) {
+        return true;
+    }
+    else if (g_clients[Player_id].x - 1 == g_clients[NPC_ID].x && g_clients[Player_id].y == g_clients[NPC_ID].y) {
+        return true;
+    }
+    else if (g_clients[Player_id].x + 1 == g_clients[NPC_ID].x && g_clients[Player_id].y == g_clients[NPC_ID].y) {
+        return true;
+    }
+    else if (g_clients[Player_id].y - 1 == g_clients[NPC_ID].y && g_clients[Player_id].x == g_clients[NPC_ID].x) {
+        return true;
+    }
+    else if (g_clients[Player_id].y + 1 == g_clients[NPC_ID].y && g_clients[Player_id].x == g_clients[NPC_ID].x) {
+        return true;
+    }
+    else if (g_clients[Player_id].y -1 == g_clients[NPC_ID].y && g_clients[Player_id].x -1 == g_clients[NPC_ID].x) {
+        return true;
+    }
+    else if (g_clients[Player_id].y - 1 == g_clients[NPC_ID].y && g_clients[Player_id].x + 1 == g_clients[NPC_ID].x) {
+        return true;
+    }
+    else if (g_clients[Player_id].y + 1 == g_clients[NPC_ID].y && g_clients[Player_id].x - 1 == g_clients[NPC_ID].x) {
+        return true;
+    }
+    else if (g_clients[Player_id].y + 1 == g_clients[NPC_ID].y && g_clients[Player_id].x + 1 == g_clients[NPC_ID].x) {
+        return true;
+    }
+    else
+        return false;
+}
+
+bool same_position(short x, short y, short x1, short y1) {
+    if (x == x1 && y == y1)
+        return true;
+    else
+        return false;
+}
+
+
+//패킷 전송 함수
 void send_packet(int id, void* p)
 {
     unsigned char* packet = reinterpret_cast<unsigned char*>(p);
@@ -283,7 +340,6 @@ void send_chat_packet(int to_client, int id, char* mess)
     strcpy_s(p.message, mess);
     send_packet(to_client, &p);
 }
-
 
 void send_item_posi_packet(int to_client, int i)
 {
@@ -372,60 +428,9 @@ void send_leave_packet(int to_client, int new_id)
     send_packet(to_client, &p);
 }
 
-bool is_in_normal_attack_range(int Player_id, int NPC_ID)
-{
-    if (g_clients[Player_id].x == g_clients[NPC_ID].x && g_clients[Player_id].y == g_clients[NPC_ID].y) {
-        return true;
-    }
-    else if (g_clients[Player_id].x - 1 == g_clients[NPC_ID].x && g_clients[Player_id].y == g_clients[NPC_ID].y) {
-        return true;
-    }
-    else if (g_clients[Player_id].x + 1 == g_clients[NPC_ID].x && g_clients[Player_id].y == g_clients[NPC_ID].y) {
-        return true;
-    }
-    else if (g_clients[Player_id].y - 1 == g_clients[NPC_ID].y && g_clients[Player_id].x == g_clients[NPC_ID].x) {
-        return true;
-    }
-    else if (g_clients[Player_id].y + 1 == g_clients[NPC_ID].y && g_clients[Player_id].x == g_clients[NPC_ID].x) {
-        return true;
-    }
-    else
-        return false;
-}
 
-bool is_in_range_attack_range(int Player_id, int NPC_ID)
-{
-    if (g_clients[Player_id].x == g_clients[NPC_ID].x && g_clients[Player_id].y == g_clients[NPC_ID].y) {
-        return true;
-    }
-    else if (g_clients[Player_id].x - 1 == g_clients[NPC_ID].x && g_clients[Player_id].y == g_clients[NPC_ID].y) {
-        return true;
-    }
-    else if (g_clients[Player_id].x + 1 == g_clients[NPC_ID].x && g_clients[Player_id].y == g_clients[NPC_ID].y) {
-        return true;
-    }
-    else if (g_clients[Player_id].y - 1 == g_clients[NPC_ID].y && g_clients[Player_id].x == g_clients[NPC_ID].x) {
-        return true;
-    }
-    else if (g_clients[Player_id].y + 1 == g_clients[NPC_ID].y && g_clients[Player_id].x == g_clients[NPC_ID].x) {
-        return true;
-    }
-    else if (g_clients[Player_id].y -1 == g_clients[NPC_ID].y && g_clients[Player_id].x -1 == g_clients[NPC_ID].x) {
-        return true;
-    }
-    else if (g_clients[Player_id].y - 1 == g_clients[NPC_ID].y && g_clients[Player_id].x + 1 == g_clients[NPC_ID].x) {
-        return true;
-    }
-    else if (g_clients[Player_id].y + 1 == g_clients[NPC_ID].y && g_clients[Player_id].x - 1 == g_clients[NPC_ID].x) {
-        return true;
-    }
-    else if (g_clients[Player_id].y + 1 == g_clients[NPC_ID].y && g_clients[Player_id].x + 1 == g_clients[NPC_ID].x) {
-        return true;
-    }
-    else
-        return false;
-}
-
+//플레이어 관련 함수
+//레벨 업데이트
 void set_player_level(int id)
 {
     if (0 <= g_clients[id].exp && g_clients[id].exp < 100)
@@ -444,100 +449,7 @@ void set_player_level(int id)
         g_clients[id].level = 0;
 
 }
-
-void respawn_npc(int npc_id)
-{
-    g_clients[npc_id].x = g_clients[npc_id].first_x;
-    g_clients[npc_id].y = g_clients[npc_id].first_y;
-    if (g_clients[npc_id].level == 1)
-        g_clients[npc_id].hp = 50;
-    else if (g_clients[npc_id].level == 2)
-        g_clients[npc_id].hp = 100;
-    else if (g_clients[npc_id].level == 3)
-        g_clients[npc_id].hp = 150;
-    else if (g_clients[npc_id].level == 4)
-        g_clients[npc_id].hp = 200;
-    else if (g_clients[npc_id].level == 5)
-        g_clients[npc_id].hp = 250;
-
-
-    g_clients[npc_id].live = true;
-
-    //섹터링
-    if (0 <= g_clients[npc_id].x && g_clients[npc_id].x <= 400 && 0 <= g_clients[npc_id].y && g_clients[npc_id].y <= 400)
-        sec1.push_back(npc_id);
-    else if (401 <= g_clients[npc_id].x && g_clients[npc_id].x <= 800 && 0 <= g_clients[npc_id].y && g_clients[npc_id].y <= 400)
-        sec2.push_back(npc_id);
-    else if (0 <= g_clients[npc_id].x && g_clients[npc_id].x <= 400 && 401 <= g_clients[npc_id].y && g_clients[npc_id].y <= 800)
-        sec3.push_back(npc_id);
-    else if (401 <= g_clients[npc_id].x && g_clients[npc_id].x <= 800 && 401 <= g_clients[npc_id].y && g_clients[npc_id].y <= 800)
-        sec4.push_back(npc_id);
-    else
-        cout << "Sector Add Error" << endl;
-
-    for (int i = 0; i < MAX_USER; ++i) {
-        if (false == g_clients[i].in_use) continue;
-        if (true == is_near(npc_id, i)) {
-            g_clients[i].vl.lock();
-            g_clients[i].view_list.insert(npc_id);
-            g_clients[i].vl.unlock();
-            g_clients[npc_id].vl.lock();
-            g_clients[npc_id].view_list.insert(i);
-            g_clients[npc_id].vl.unlock();
-
-            send_enter_packet(i, npc_id);
-            //WakeUp을 하면서 is_active를 True로 활성화
-            wake_up_npc(npc_id);
-        }
-    }
-
-    g_clients[npc_id].lua_lock.lock();
-    lua_getglobal(g_clients[npc_id].L, "set_x");
-    lua_pushnumber(g_clients[npc_id].L, g_clients[npc_id].x);
-    lua_pcall(g_clients[npc_id].L, 1, 1, 0);
-
-    lua_getglobal(g_clients[npc_id].L, "set_y");
-    lua_pushnumber(g_clients[npc_id].L, g_clients[npc_id].y);
-    lua_pcall(g_clients[npc_id].L, 1, 1, 0);
-
-    lua_getglobal(g_clients[npc_id].L, "set_level");
-    lua_pushnumber(g_clients[npc_id].L, g_clients[npc_id].level);
-    lua_pcall(g_clients[npc_id].L, 1, 1, 0);
-
-    lua_getglobal(g_clients[npc_id].L, "set_hp");
-    lua_pushnumber(g_clients[npc_id].L, g_clients[npc_id].hp);
-    lua_pcall(g_clients[npc_id].L, 1, 1, 0);
-    g_clients[npc_id].lua_lock.unlock();
-}
-
-void npc_die(int npc_id)
-{
-    g_clients[npc_id].is_active = false;
-    g_clients[npc_id].live = false;
-    g_clients[npc_id].attack = false;
-    //해당 NPC 섹터에서 삭제
-    sec1.erase(std::remove(sec1.begin(), sec1.end(), npc_id), sec1.end());
-    sec2.erase(std::remove(sec2.begin(), sec2.end(), npc_id), sec2.end());
-    sec3.erase(std::remove(sec3.begin(), sec3.end(), npc_id), sec3.end());
-    sec4.erase(std::remove(sec4.begin(), sec4.end(), npc_id), sec4.end());
-
-    for (int i = 0; i < MAX_USER; ++i) {
-        if (true == g_clients[i].in_use) {
-            if (false == is_near(i, npc_id)) continue;
-            //NPC가 죽을 경우 해당 NPC를 보고 있는 모든 플레이어 에게 leave 패킷을 전송
-            send_leave_packet(i, npc_id);
-
-            //마지막에 원인 찾기
-            //g_clients[i].vl.lock();
-            //g_clients[i].view_list.erase(npc_id);
-            //g_clients[i].vl.unlock();
-        }
-
-    }
-
-    add_timer(npc_id, OP_NPC_RESPAWN, system_clock::now() + 10s, 0);
-}
-
+//HP 회복
 void recovery_player_hp(int player_id)
 {
     if (true == g_clients[player_id].hp_recov_5s_time) return;
@@ -553,7 +465,7 @@ void recovery_player_hp(int player_id)
 
     send_change_state_packet(player_id, player_id, 0);
 
-    //체력이 5000미만일 경우 재 호출
+    //체력이 MAX미만일 경우 재 호출
     if (g_clients[player_id].hp < PLAYER_MAX_HP) {
         g_clients[player_id].hp_recov_5s_time = true;
         add_timer(player_id, OP_PLAYER_HP_RECOVERY_5s, system_clock::now() + 5000ms, 0);
@@ -562,7 +474,7 @@ void recovery_player_hp(int player_id)
         g_clients[player_id].recovery = false;
 
 }
-
+//죽은 뒤 부활
 void player_die_and_respawn(int id)
 {
     g_clients[id].view_list.clear();
@@ -574,7 +486,7 @@ void player_die_and_respawn(int id)
     set_player_level(id);
 
     send_login_ok(id);
-    //주위에 존재하는 플레이어들을 알려줌 현재는 User만 알려줌 NPC도 알려줘야함
+    //주위에 존재하는 플레이어, NPC 알려줌
     if (0 <= g_clients[id].x && g_clients[id].x <= 380 && 0 <= g_clients[id].y && g_clients[id].y <= 380)
     {
         for (int i : sec1) {
@@ -1006,49 +918,7 @@ void player_die_and_respawn(int id)
         cout << "Sector Get Error" << endl;
 
 }
-
-void npc_attack(int npc_id, int player_id)
-{
-    if (true == g_clients[npc_id].attack_1s_time) return;
-    if (g_clients[npc_id].live == false) return;
-    if (g_clients[npc_id].is_active == false) return;
-
-    if (is_in_normal_attack_range(npc_id, player_id))
-    {
-        g_clients[npc_id].attack = true;
-        g_clients[player_id].hp -= MONSTER_ATTACK_DAMAGE;
-
-        send_change_state_packet(player_id, player_id, npc_id);
-
-        //HP가 5000보다 적으면 피회복 시작
-        if (g_clients[player_id].hp < PLAYER_MAX_HP)
-        {
-            if (g_clients[player_id].recovery == false) {
-                g_clients[player_id].recovery = true;
-                g_clients[player_id].hp_recov_5s_time = true;
-                add_timer(player_id, OP_PLAYER_HP_RECOVERY_5s, system_clock::now() + 5000ms, 0);
-            }
-        }
-        //플레이어가 죽으면 처리
-        //?
-        if (g_clients[player_id].hp <= 0) {
-            player_die_and_respawn(player_id);
-        }
-
-    }
-
-    if (is_in_normal_attack_range(npc_id, player_id)) {
-        g_clients[npc_id].attack_1s_time = true;
-        add_timer(npc_id, OP_NPC_ATTACK_1s, system_clock::now() + 1000ms, player_id);
-    }
-    else {
-        g_clients[npc_id].attack = false;
-        g_clients[npc_id].is_active = false;
-        wake_up_npc(npc_id);
-    }
-
-}
-
+//경험치 업데이트
 void update_player_exp(int id, int npc) {
     short exp = 0;
     exp = g_clients[npc].level * 5;
@@ -1063,7 +933,7 @@ void update_player_exp(int id, int npc) {
 
     g_clients[id].exp += exp;
 }
-
+//공격 처리
 void process_attack(int id, int attack_type)
 {
     if (true == g_clients[id].attack_1s_time) return;
@@ -1144,7 +1014,7 @@ void process_attack(int id, int attack_type)
     g_clients[id].attack_1s_time = true;
     add_timer(id, OP_PLAYER_ATTACK_1s, system_clock::now() + 1000ms, 0);
 }
-
+//이동 처리
 void process_move(int id, char dir)
 {
     if (true == g_clients[id].move_1s_time) return;
@@ -1642,10 +1512,579 @@ void process_move(int id, char dir)
     }
 
     g_clients[id].move_1s_time = true;
-    add_timer(id, OP_PLAYER_MOVE_1s, system_clock::now() + 10ms, 0);
+    add_timer(id, OP_PLAYER_MOVE_1s, system_clock::now() + 1000ms, 0);
 
 }
+//클라이언트 연결
+void add_new_client(SOCKET ns)
+{
+    int i;
+    id_lock.lock();
+    for (i = 0; i < MAX_USER; ++i)
+        if (false == g_clients[i].in_use) break;
+    id_lock.unlock();
+    if (MAX_USER == i) {
+        cout << "Max user limit exceeded.\n";
+        closesocket(ns);
+    }
+    else {
+        //cout << "New Client [" << i << "] Accepted" << endl;
+        g_clients[i].c_lock.lock();
+        g_clients[i].in_use = true;
+        g_clients[i].m_sock = ns;
+        g_clients[i].name[0] = 0;
+        g_clients[i].id = -1;
+        g_clients[i].c_lock.unlock();
 
+        g_clients[i].m_packet_start = g_clients[i].m_recv_over.iocp_buf;
+        g_clients[i].m_recv_over.op_mode = OP_MODE_RECV;
+        g_clients[i].m_recv_over.wsa_buf.buf
+            = reinterpret_cast<CHAR*>(g_clients[i].m_recv_over.iocp_buf);
+        g_clients[i].m_recv_over.wsa_buf.len = sizeof(g_clients[i].m_recv_over.iocp_buf);
+        ZeroMemory(&g_clients[i].m_recv_over.wsa_over, sizeof(g_clients[i].m_recv_over.wsa_over));
+        g_clients[i].m_recv_start = g_clients[i].m_recv_over.iocp_buf;
+
+        CreateIoCompletionPort(reinterpret_cast<HANDLE>(ns), h_iocp, i, 0);
+        DWORD flags = 0;
+        int ret;
+        g_clients[i].c_lock.lock();
+        if (true == g_clients[i].in_use) {
+            ret = WSARecv(g_clients[i].m_sock, &g_clients[i].m_recv_over.wsa_buf, 1, NULL,
+                &flags, &g_clients[i].m_recv_over.wsa_over, NULL);
+        }
+        g_clients[i].c_lock.unlock();
+        if (SOCKET_ERROR == ret) {
+            int err_no = WSAGetLastError();
+            if (ERROR_IO_PENDING != err_no)
+                error_display("WSARecv : ", err_no);
+        }
+    }
+    SOCKET cSocket = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED);
+    g_accept_over.op_mode = OP_MODE_ACCEPT;
+    g_accept_over.wsa_buf.len = static_cast<ULONG> (cSocket);
+    ZeroMemory(&g_accept_over.wsa_over, sizeof(&g_accept_over.wsa_over));
+    AcceptEx(g_lSocket, cSocket, g_accept_over.iocp_buf, 0, 32, 32, NULL, &g_accept_over.wsa_over);
+}
+//연결 종료
+void disconnect_client(int id)
+{
+    cout << "Player:" << id << " Disconnect" << endl;
+    //데이터 베이스 업데이트
+    update_db(g_clients[id].id, g_clients[id].x, g_clients[id].y, g_clients[id].hp, g_clients[id].level, g_clients[id].exp, g_clients[id].first_x, g_clients[id].first_y);
+    for (int i = 0; i < MAX_USER; ++i) {
+        if (true == g_clients[i].in_use)
+            if (i != id) {
+                if (0 != g_clients[i].view_list.count(id)) {
+                    g_clients[i].vl.lock();
+                    g_clients[i].view_list.erase(id);
+                    g_clients[i].vl.unlock();
+                    send_leave_packet(i, id);
+                }
+            }
+    }
+    sec1.erase(std::remove(sec1.begin(), sec1.end(), id), sec1.end());
+    sec2.erase(std::remove(sec2.begin(), sec2.end(), id), sec2.end());
+    sec3.erase(std::remove(sec3.begin(), sec3.end(), id), sec3.end());
+    sec4.erase(std::remove(sec4.begin(), sec4.end(), id), sec4.end());
+    g_clients[id].c_lock.lock();
+    g_clients[id].in_use = false;
+    g_clients[id].view_list.clear();
+    closesocket(g_clients[id].m_sock);
+    g_clients[id].m_sock = 0;
+    g_clients[id].first_x = 0;
+    g_clients[id].first_y = 0;
+    g_clients[id].x = 0;
+    g_clients[id].y = 0;
+    g_clients[id].hp = 0;
+    g_clients[id].level = 0;
+    g_clients[id].exp = 0;
+    g_clients[id].c_lock.unlock();
+}
+
+
+
+//NPC 관련 함수
+//NPC 초기화
+void initialize_NPC()
+{
+    cout << "Initializing NPC" << endl;
+    for (int i = MAX_USER; i < MAX_USER + NUM_NPC; ++i)
+    {
+        g_clients[i].x = rand() % WORLD_WIDTH;
+        g_clients[i].y = rand() % WORLD_HEIGHT;
+        g_clients[i].first_x = g_clients[i].x;
+        g_clients[i].first_y = g_clients[i].y;
+        if (0 <= g_clients[i].x && g_clients[i].x <= 400 && 0 <= g_clients[i].y && g_clients[i].y <= 400)
+            sec1.push_back(i);
+        else if (401 <= g_clients[i].x && g_clients[i].x <= 800 && 0 <= g_clients[i].y && g_clients[i].y <= 400)
+            sec2.push_back(i);
+        else if (0 <= g_clients[i].x && g_clients[i].x <= 400 && 401 <= g_clients[i].y && g_clients[i].y <= 800)
+            sec3.push_back(i);
+        else if (401 <= g_clients[i].x && g_clients[i].x <= 800 && 401 <= g_clients[i].y && g_clients[i].y <= 800)
+            sec4.push_back(i);
+        else
+            cout << "Sector Add Error" << endl;
+
+        //NPC 고정, 이동여부 초기화
+        if (i % 2 == 0)
+        {
+            g_clients[i].fixed = true;
+        }
+        else
+            g_clients[i].fixed = false;
+
+        //어그로 타입, 일반 타입 초기화
+        if (i < MAX_USER + (NUM_NPC) / 2) {
+            g_clients[i].attack_type = true;
+        }
+        else
+            g_clients[i].attack_type = false;
+
+        char npc_name[50];
+        sprintf_s(npc_name, "N%d", i);
+        strcpy_s(g_clients[i].name, npc_name);
+        g_clients[i].is_active = false;
+        g_clients[i].live = true;
+
+        //레벨 랜덤 설정 후 레벨 별로 Hp 설정
+        switch (rand() % 5)
+        {
+        case 0: {
+            g_clients[i].hp = 50;
+            g_clients[i].level = 1;
+            break;
+        }
+        case 1: {
+            g_clients[i].hp = 100;
+            g_clients[i].level = 2;
+            break;
+        }
+        case 2: {
+            g_clients[i].hp = 150;
+            g_clients[i].level = 3;
+            break;
+        }
+        case 3: {
+            g_clients[i].hp = 200;
+            g_clients[i].level = 4;
+            break;
+        }
+        case 4: {
+            g_clients[i].hp = 250;
+            g_clients[i].level = 5;
+            break;
+        }
+        }
+
+        lua_State* L = g_clients[i].L = luaL_newstate();
+        luaL_openlibs(L);
+
+        int error = luaL_loadfile(L, "monster.lua");
+        error = lua_pcall(L, 0, 0, 0);
+
+        lua_getglobal(L, "set_uid");
+        lua_pushnumber(L, i);
+        lua_pcall(L, 1, 1, 0);
+
+        lua_getglobal(L, "set_x");
+        lua_pushnumber(L, g_clients[i].x);
+        lua_pcall(L, 1, 1, 0);
+
+        lua_getglobal(L, "set_y");
+        lua_pushnumber(L, g_clients[i].y);
+        lua_pcall(L, 1, 1, 0);
+
+        lua_getglobal(L, "set_level");
+        lua_pushnumber(L, g_clients[i].level);
+        lua_pcall(L, 1, 1, 0);
+
+        lua_getglobal(L, "set_hp");
+        lua_pushnumber(L, g_clients[i].hp);
+        lua_pcall(L, 1, 1, 0);
+
+        lua_getglobal(L, "set_move_type");
+        lua_pushnumber(L, g_clients[i].fixed);
+        lua_pcall(L, 1, 1, 0);
+
+        lua_getglobal(L, "set_attack_type");
+        lua_pushnumber(L, g_clients[i].attack_type);
+        lua_pcall(L, 1, 1, 0);
+
+
+        lua_register(L, "API_SendMessage", API_SendMessage);
+        lua_register(L, "API_get_x", API_get_x);
+        lua_register(L, "API_get_y", API_get_y);
+
+    }
+    cout << "NPC initialize finished." << endl;
+}
+//NPC 랜덤 이동
+void random_move_npc(int id)
+{
+    if (g_clients[id].live == false) return;
+    //고정 캐릭터 일 경우 move 안함
+    if (g_clients[id].fixed == true) return;
+
+    if (g_clients[id].attack == true) return;
+    //플레이어 뷰리스트를 갱신해줘야 함 NPC가 들어갈 때와 나갈 떄
+    unordered_set <int> old_viewlist;
+    for (int i = 0; i < MAX_USER; ++i) {
+        if (false == g_clients[i].in_use) continue;
+        if (true == is_near(id, i)) old_viewlist.insert(i);
+    }
+
+    //LUA
+    g_clients[id].lua_lock.lock();
+    lua_getglobal(g_clients[id].L, "my_x");		
+    int x = lua_tonumber(g_clients[id].L, -1); 
+    lua_getglobal(g_clients[id].L, "my_y");
+    int y = lua_tonumber(g_clients[id].L, -1);
+    lua_pop(g_clients[id].L, 2);
+    g_clients[id].lua_lock.unlock();
+
+    //int  x = g_clients[id].x;
+    //int  y = g_clients[id].y;
+
+    //움직이는 NPC 범위 내 이동
+    if (!is_in_moverange(x, y, g_clients[id].first_x, g_clients[id].first_y, 20))
+    {
+        while (true) {
+            switch (rand() % 4)
+            {
+            case 0: if (x > 0) x--; break;
+            case 1: if (x < (WORLD_WIDTH - 1)) x++; break;
+            case 2: if (y > 0) y--; break;
+            case 3: if (y < (WORLD_HEIGHT - 1)) y++; break;
+            }
+            if (is_in_moverange(x, y, g_clients[id].first_x, g_clients[id].first_y, 20)) break;
+            x = g_clients[id].x;
+            y = g_clients[id].y;
+        }
+    }
+    else
+    {
+        switch (rand() % 4)
+        {
+        case 0: if (x > 0) x--; break;
+        case 1: if (x < (WORLD_WIDTH - 1)) x++; break;
+        case 2: if (y > 0) y--; break;
+        case 3: if (y < (WORLD_HEIGHT - 1)) y++; break;
+        }
+    }
+
+    if (g_clients[id].attack_type == true) {
+        int chase_player_id = -1;
+        for (int i = 0; i < MAX_USER; ++i) {
+            if (id == i) continue;
+            if (false == g_clients[i].in_use) continue;
+            if (true == is_near_dis(id, i, 10)) {
+                chase_player_id = i;
+                //cout << "ID"<<i << endl;
+                break;
+            }
+        }
+        if (chase_player_id != -1) {
+            if (g_clients[chase_player_id].in_use == true) {
+                if (!same_position(g_clients[id].x, g_clients[id].y, g_clients[chase_player_id].x, g_clients[chase_player_id].y))
+                {
+                    //cout << g_clients[id].x << "    " << g_clients[id].y << endl;
+                    //cout << g_clients[chase_player_id].x << "   " << g_clients[chase_player_id].y << endl;
+                    Astar::Coordinate A(g_clients[id].x, g_clients[id].y);
+                    Astar::Coordinate B(g_clients[chase_player_id].x, g_clients[chase_player_id].y);
+
+                    Astar astar(A, B);
+                    //cout << astar.GetPos(2).x << "   " << astar.GetPos(2).y << endl;
+                    int x1, y1;
+                    x1 = astar.GetPos(2).x;
+                    y1 = astar.GetPos(2).y;
+                    if (is_in_moverange(x1, y1, g_clients[id].first_x, g_clients[id].first_y, 20))
+                    {
+                        x = x1;
+                        y = y1;
+                    }
+                    //cout << "x: " << x << "y: " << y << endl;
+                    //공격 범위에 들어오면 공격
+                    if (is_in_normal_attack_range(id, chase_player_id)) {
+                        if (g_clients[id].attack == false) {
+                            g_clients[id].attack_1s_time = true;
+                            add_timer(id, OP_NPC_ATTACK_1s, system_clock::now() + 1000ms, chase_player_id);
+                        }
+                    }
+                }
+                else {
+                    //cout << "same posi" << endl;
+                    x = g_clients[id].x;
+                    y = g_clients[id].y;
+                    //어그로 몬스터가 플레이어 좌표와 같아지면 공격
+                    if (g_clients[id].attack == false) {
+                        g_clients[id].attack_1s_time = true;
+                        add_timer(id, OP_NPC_ATTACK_1s, system_clock::now() + 1000ms, chase_player_id);
+                    }
+                }
+            }
+        }
+    }
+
+    //장애물 충돌처리
+    bool collision_obtacle = false;
+    for (int i = 0; i < NUM_OBTACLE; i++)
+    {
+        if (ob_positions[i].x == x && ob_positions[i].y == y)
+            collision_obtacle = true;
+    }
+
+    if (!collision_obtacle) {
+        g_clients[id].x = x;
+        g_clients[id].y = y;
+
+
+        //LUA
+        g_clients[id].lua_lock.lock();
+        lua_getglobal(g_clients[id].L, "set_x");
+        lua_pushnumber(g_clients[id].L, g_clients[id].x);
+        lua_pcall(g_clients[id].L, 1, 1, 0);
+        lua_getglobal(g_clients[id].L, "set_y");
+        lua_pushnumber(g_clients[id].L, g_clients[id].y);
+        lua_pcall(g_clients[id].L, 1, 1, 0);
+        g_clients[id].lua_lock.unlock();
+
+    }
+
+    if (0 <= g_clients[id].x && g_clients[id].x <= 400 && 0 <= g_clients[id].y && g_clients[id].y <= 400) {
+        if (std::find(sec1.begin(), sec1.end(), id) != sec1.end() == false) {
+            sec1.push_back(id);
+            sec2.erase(std::remove(sec2.begin(), sec2.end(), id), sec2.end());
+            sec3.erase(std::remove(sec3.begin(), sec3.end(), id), sec3.end());
+        }
+    }
+    else if (401 <= g_clients[id].x && g_clients[id].x <= 800 && 0 <= g_clients[id].y && g_clients[id].y <= 400) {
+        if (std::find(sec2.begin(), sec2.end(), id) != sec2.end() == false) {
+            sec2.push_back(id);
+            sec1.erase(std::remove(sec1.begin(), sec1.end(), id), sec1.end());
+            sec4.erase(std::remove(sec4.begin(), sec4.end(), id), sec4.end());
+        }
+    }
+    else if (0 <= g_clients[id].x && g_clients[id].x <= 400 && 401 <= g_clients[id].y && g_clients[id].y <= 800) {
+        if (std::find(sec3.begin(), sec3.end(), id) != sec3.end() == false) {
+            sec3.push_back(id);
+            sec1.erase(std::remove(sec1.begin(), sec1.end(), id), sec1.end());
+            sec4.erase(std::remove(sec4.begin(), sec4.end(), id), sec4.end());
+        }
+    }
+    else if (401 <= g_clients[id].x && g_clients[id].x <= 800 && 401 <= g_clients[id].y && g_clients[id].y <= 800) {
+        if (std::find(sec4.begin(), sec4.end(), id) != sec4.end() == false) {
+            sec4.push_back(id);
+            sec2.erase(std::remove(sec2.begin(), sec2.end(), id), sec2.end());
+            sec3.erase(std::remove(sec3.begin(), sec3.end(), id), sec3.end());
+        }
+    }
+    else
+        cout << "Sector Move Error" << endl;
+
+    unordered_set <int> new_viewlist;
+    for (int i = 0; i < MAX_USER; ++i) {
+        if (id == i) continue;
+        if (false == g_clients[i].in_use) continue;
+        if (true == is_near(id, i)) {
+            new_viewlist.insert(i);
+        }
+        else
+            g_clients[id].is_active = false;
+    }
+
+    for (auto pl : old_viewlist) {
+        if (0 < new_viewlist.count(pl)) {
+            //멀티 스레드이기 때문에 뷰리스트에 있는지 없는지 확실하지 않음
+            if (0 < g_clients[pl].view_list.count(id))
+                send_move_packet(pl, id);
+            else
+            {
+                g_clients[pl].view_list.insert(id);
+                send_enter_packet(pl, id);
+            }
+        }
+        else
+        {
+            if (0 < g_clients[pl].view_list.count(id)) {
+                g_clients[pl].view_list.erase(id);
+                send_leave_packet(pl, id);
+                g_clients[id].is_active = false;
+            }
+        }
+    }
+
+    for (auto pl : new_viewlist) {
+        if (0 == g_clients[pl].view_list.count(pl)) {
+            if (0 == g_clients[pl].view_list.count(id)) {
+                g_clients[pl].view_list.insert(id);
+                send_enter_packet(pl, id);
+            }
+            else
+                send_move_packet(pl, id);
+        }
+    }
+
+    if (true == new_viewlist.empty()) {
+        g_clients[id].is_active = false;
+    }
+    else {
+        add_timer(id, OP_RANDOM_MOVE, system_clock::now() + 1000ms, 0);
+    }
+
+    g_clients[id].lua_lock.lock();
+    lua_getglobal(g_clients[id].L, "count_move");
+    lua_pcall(g_clients[id].L, 0, 0, 0);
+    g_clients[id].lua_lock.unlock();
+}
+//NPC 부활
+void respawn_npc(int npc_id)
+{
+    g_clients[npc_id].x = g_clients[npc_id].first_x;
+    g_clients[npc_id].y = g_clients[npc_id].first_y;
+    if (g_clients[npc_id].level == 1)
+        g_clients[npc_id].hp = 50;
+    else if (g_clients[npc_id].level == 2)
+        g_clients[npc_id].hp = 100;
+    else if (g_clients[npc_id].level == 3)
+        g_clients[npc_id].hp = 150;
+    else if (g_clients[npc_id].level == 4)
+        g_clients[npc_id].hp = 200;
+    else if (g_clients[npc_id].level == 5)
+        g_clients[npc_id].hp = 250;
+
+
+    g_clients[npc_id].live = true;
+
+    //섹터링
+    if (0 <= g_clients[npc_id].x && g_clients[npc_id].x <= 400 && 0 <= g_clients[npc_id].y && g_clients[npc_id].y <= 400)
+        sec1.push_back(npc_id);
+    else if (401 <= g_clients[npc_id].x && g_clients[npc_id].x <= 800 && 0 <= g_clients[npc_id].y && g_clients[npc_id].y <= 400)
+        sec2.push_back(npc_id);
+    else if (0 <= g_clients[npc_id].x && g_clients[npc_id].x <= 400 && 401 <= g_clients[npc_id].y && g_clients[npc_id].y <= 800)
+        sec3.push_back(npc_id);
+    else if (401 <= g_clients[npc_id].x && g_clients[npc_id].x <= 800 && 401 <= g_clients[npc_id].y && g_clients[npc_id].y <= 800)
+        sec4.push_back(npc_id);
+    else
+        cout << "Sector Add Error" << endl;
+
+    for (int i = 0; i < MAX_USER; ++i) {
+        if (false == g_clients[i].in_use) continue;
+        if (true == is_near(npc_id, i)) {
+            g_clients[i].vl.lock();
+            g_clients[i].view_list.insert(npc_id);
+            g_clients[i].vl.unlock();
+            g_clients[npc_id].vl.lock();
+            g_clients[npc_id].view_list.insert(i);
+            g_clients[npc_id].vl.unlock();
+
+            send_enter_packet(i, npc_id);
+            //WakeUp을 하면서 is_active를 True로 활성화
+            wake_up_npc(npc_id);
+        }
+    }
+
+    g_clients[npc_id].lua_lock.lock();
+    lua_getglobal(g_clients[npc_id].L, "set_x");
+    lua_pushnumber(g_clients[npc_id].L, g_clients[npc_id].x);
+    lua_pcall(g_clients[npc_id].L, 1, 1, 0);
+
+    lua_getglobal(g_clients[npc_id].L, "set_y");
+    lua_pushnumber(g_clients[npc_id].L, g_clients[npc_id].y);
+    lua_pcall(g_clients[npc_id].L, 1, 1, 0);
+
+    lua_getglobal(g_clients[npc_id].L, "set_level");
+    lua_pushnumber(g_clients[npc_id].L, g_clients[npc_id].level);
+    lua_pcall(g_clients[npc_id].L, 1, 1, 0);
+
+    lua_getglobal(g_clients[npc_id].L, "set_hp");
+    lua_pushnumber(g_clients[npc_id].L, g_clients[npc_id].hp);
+    lua_pcall(g_clients[npc_id].L, 1, 1, 0);
+    g_clients[npc_id].lua_lock.unlock();
+}
+//NPC 죽음
+void npc_die(int npc_id)
+{
+    g_clients[npc_id].is_active = false;
+    g_clients[npc_id].live = false;
+    g_clients[npc_id].attack = false;
+    //해당 NPC 섹터에서 삭제
+    sec1.erase(std::remove(sec1.begin(), sec1.end(), npc_id), sec1.end());
+    sec2.erase(std::remove(sec2.begin(), sec2.end(), npc_id), sec2.end());
+    sec3.erase(std::remove(sec3.begin(), sec3.end(), npc_id), sec3.end());
+    sec4.erase(std::remove(sec4.begin(), sec4.end(), npc_id), sec4.end());
+
+    for (int i = 0; i < MAX_USER; ++i) {
+        if (true == g_clients[i].in_use) {
+            if (false == is_near(i, npc_id)) continue;
+            //NPC가 죽을 경우 해당 NPC를 보고 있는 모든 플레이어 에게 leave 패킷을 전송
+            send_leave_packet(i, npc_id);
+
+        }
+
+    }
+
+    add_timer(npc_id, OP_NPC_RESPAWN, system_clock::now() + 30s, 0);
+}
+//NPC 공격
+void npc_attack(int npc_id, int player_id)
+{
+    if (true == g_clients[npc_id].attack_1s_time) return;
+    if (g_clients[npc_id].live == false) return;
+    if (g_clients[npc_id].is_active == false) return;
+
+    if (is_in_normal_attack_range(npc_id, player_id))
+    {
+        g_clients[npc_id].attack = true;
+        g_clients[player_id].hp -= MONSTER_ATTACK_DAMAGE;
+
+        send_change_state_packet(player_id, player_id, npc_id);
+
+        //HP가 2000보다 적으면 피회복 시작
+        if (g_clients[player_id].hp < PLAYER_MAX_HP)
+        {
+            if (g_clients[player_id].recovery == false) {
+                g_clients[player_id].recovery = true;
+                g_clients[player_id].hp_recov_5s_time = true;
+                add_timer(player_id, OP_PLAYER_HP_RECOVERY_5s, system_clock::now() + 5000ms, 0);
+            }
+        }
+        //플레이어가 죽으면 처리
+
+        if (g_clients[player_id].hp <= 0) {
+            player_die_and_respawn(player_id);
+        }
+
+    }
+
+    if (is_in_normal_attack_range(npc_id, player_id)) {
+        g_clients[npc_id].attack_1s_time = true;
+        add_timer(npc_id, OP_NPC_ATTACK_1s, system_clock::now() + 1000ms, player_id);
+    }
+    else {
+        g_clients[npc_id].attack = false;
+        g_clients[npc_id].is_active = false;
+        wake_up_npc(npc_id);
+    }
+
+}
+//NPC 인지 판단
+bool is_npc(int p1)
+{
+    return p1 >= MAX_USER;
+}
+//NPC 깨우기
+void wake_up_npc(int id)
+{
+    bool b = false;
+    if (true == g_clients[id].is_active.compare_exchange_strong(b, true))
+    {
+        add_timer(id, OP_RANDOM_MOVE, system_clock::now() + 1000ms, 0);
+    }
+}
+
+
+
+//패킷 처리 함수 
 void process_packet(int id)
 {
     char p_type = g_clients[id].m_packet_start[1];
@@ -1697,7 +2136,7 @@ void process_packet(int id)
         send_login_ok(id);
 
 
-        //주위에 존재하는 플레이어들을 알려줌 현재는 User만 알려줌 NPC도 알려줘야함
+        //주위에 존재하는 플레이어, NPC 알려줌
         if (0 <= g_clients[id].x && g_clients[id].x <= 380 && 0 <= g_clients[id].y && g_clients[id].y <= 380)
         {
             for (int i : sec1) {
@@ -2222,91 +2661,7 @@ void process_recv(int id, DWORD iosize)
     g_clients[id].c_lock.unlock();
 }
 
-void add_new_client(SOCKET ns)
-{
-    int i;
-    id_lock.lock();
-    for (i = 0; i < MAX_USER; ++i)
-        if (false == g_clients[i].in_use) break;
-    id_lock.unlock();
-    if (MAX_USER == i) {
-        cout << "Max user limit exceeded.\n";
-        closesocket(ns);
-    }
-    else {
-        //cout << "New Client [" << i << "] Accepted" << endl;
-        g_clients[i].c_lock.lock();
-        g_clients[i].in_use = true;
-        g_clients[i].m_sock = ns;
-        g_clients[i].name[0] = 0;
-        g_clients[i].id = -1;
-        g_clients[i].c_lock.unlock();
-
-        g_clients[i].m_packet_start = g_clients[i].m_recv_over.iocp_buf;
-        g_clients[i].m_recv_over.op_mode = OP_MODE_RECV;
-        g_clients[i].m_recv_over.wsa_buf.buf
-            = reinterpret_cast<CHAR*>(g_clients[i].m_recv_over.iocp_buf);
-        g_clients[i].m_recv_over.wsa_buf.len = sizeof(g_clients[i].m_recv_over.iocp_buf);
-        ZeroMemory(&g_clients[i].m_recv_over.wsa_over, sizeof(g_clients[i].m_recv_over.wsa_over));
-        g_clients[i].m_recv_start = g_clients[i].m_recv_over.iocp_buf;
-
-        CreateIoCompletionPort(reinterpret_cast<HANDLE>(ns), h_iocp, i, 0);
-        DWORD flags = 0;
-        int ret;
-        g_clients[i].c_lock.lock();
-        if (true == g_clients[i].in_use) {
-            ret = WSARecv(g_clients[i].m_sock, &g_clients[i].m_recv_over.wsa_buf, 1, NULL,
-                &flags, &g_clients[i].m_recv_over.wsa_over, NULL);
-        }
-        g_clients[i].c_lock.unlock();
-        if (SOCKET_ERROR == ret) {
-            int err_no = WSAGetLastError();
-            if (ERROR_IO_PENDING != err_no)
-                error_display("WSARecv : ", err_no);
-        }
-    }
-    SOCKET cSocket = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED);
-    g_accept_over.op_mode = OP_MODE_ACCEPT;
-    g_accept_over.wsa_buf.len = static_cast<ULONG> (cSocket);
-    ZeroMemory(&g_accept_over.wsa_over, sizeof(&g_accept_over.wsa_over));
-    AcceptEx(g_lSocket, cSocket, g_accept_over.iocp_buf, 0, 32, 32, NULL, &g_accept_over.wsa_over);
-}
-
-void disconnect_client(int id)
-{
-    cout << "Player:" << id << " Disconnect" << endl;
-    //데이터 베이스 업데이트
-    update_db(g_clients[id].id, g_clients[id].x, g_clients[id].y, g_clients[id].hp, g_clients[id].level, g_clients[id].exp, g_clients[id].first_x, g_clients[id].first_y);
-    for (int i = 0; i < MAX_USER; ++i) {
-        if (true == g_clients[i].in_use)
-            if (i != id) {
-                if (0 != g_clients[i].view_list.count(id)) {
-                    g_clients[i].vl.lock();
-                    g_clients[i].view_list.erase(id);
-                    g_clients[i].vl.unlock();
-                    send_leave_packet(i, id);
-                }
-            }
-    }
-    sec1.erase(std::remove(sec1.begin(), sec1.end(), id), sec1.end());
-    sec2.erase(std::remove(sec2.begin(), sec2.end(), id), sec2.end());
-    sec3.erase(std::remove(sec3.begin(), sec3.end(), id), sec3.end());
-    sec4.erase(std::remove(sec4.begin(), sec4.end(), id), sec4.end());
-    g_clients[id].c_lock.lock();
-    g_clients[id].in_use = false;
-    g_clients[id].view_list.clear();
-    closesocket(g_clients[id].m_sock);
-    g_clients[id].m_sock = 0;
-    g_clients[id].first_x = 0;
-    g_clients[id].first_y = 0;
-    g_clients[id].x = 0;
-    g_clients[id].y = 0;
-    g_clients[id].hp = 0;
-    g_clients[id].level = 0;
-    g_clients[id].exp = 0;
-    g_clients[id].c_lock.unlock();
-}
-
+//Worker Thread
 void worker_thread()
 {
     // 반복
@@ -2390,6 +2745,8 @@ void worker_thread()
     }
 }
 
+
+//스크립트 연동 함수
 int API_get_x(lua_State* L)
 {
     int user_id = lua_tointeger(L, -1);
@@ -2420,346 +2777,8 @@ int API_SendMessage(lua_State* L)
     return 0;
 }
 
-void initialize_NPC()
-{
-    cout << "Initializing NPC" << endl;
-    for (int i = MAX_USER; i < MAX_USER + NUM_NPC; ++i)
-    {
-        g_clients[i].x = rand() % WORLD_WIDTH;
-        g_clients[i].y = rand() % WORLD_HEIGHT;
-        g_clients[i].first_x = g_clients[i].x;
-        g_clients[i].first_y = g_clients[i].y;
-        if (0 <= g_clients[i].x && g_clients[i].x <= 400 && 0 <= g_clients[i].y && g_clients[i].y <= 400)
-            sec1.push_back(i);
-        else if (401 <= g_clients[i].x && g_clients[i].x <= 800 && 0 <= g_clients[i].y && g_clients[i].y <= 400)
-            sec2.push_back(i);
-        else if (0 <= g_clients[i].x && g_clients[i].x <= 400 && 401 <= g_clients[i].y && g_clients[i].y <= 800)
-            sec3.push_back(i);
-        else if (401 <= g_clients[i].x && g_clients[i].x <= 800 && 401 <= g_clients[i].y && g_clients[i].y <= 800)
-            sec4.push_back(i);
-        else
-            cout << "Sector Add Error" << endl;
 
-        //NPC 고정, 이동여부 초기화
-        if (i % 2 == 0)
-        {
-            g_clients[i].fixed = true;
-        }
-        else
-            g_clients[i].fixed = false;
-
-        //어그로 타입, 일반 타입 초기화
-        if (i < MAX_USER + (NUM_NPC) / 2) {
-            g_clients[i].attack_type = true;
-        }
-        else
-            g_clients[i].attack_type = false;
-
-        char npc_name[50];
-        sprintf_s(npc_name, "N%d", i);
-        strcpy_s(g_clients[i].name, npc_name);
-        g_clients[i].is_active = false;
-        g_clients[i].live = true;
-
-        //레벨 랜덤 설정 후 레벨 별로 Hp 설정
-        switch (rand() % 5)
-        {
-        case 0: {
-            g_clients[i].hp = 50;
-            g_clients[i].level = 1;
-            break;
-        }
-        case 1: {
-            g_clients[i].hp = 100;
-            g_clients[i].level = 2;
-            break;
-        }
-        case 2: {
-            g_clients[i].hp = 150;
-            g_clients[i].level = 3;
-            break;
-        }
-        case 3: {
-            g_clients[i].hp = 200;
-            g_clients[i].level = 4;
-            break;
-        }
-        case 4: {
-            g_clients[i].hp = 250;
-            g_clients[i].level = 5;
-            break;
-        }
-        }
-
-        lua_State* L = g_clients[i].L = luaL_newstate();
-        luaL_openlibs(L);
-
-        int error = luaL_loadfile(L, "monster.lua");
-        error = lua_pcall(L, 0, 0, 0);
-
-        lua_getglobal(L, "set_uid");
-        lua_pushnumber(L, i);
-        lua_pcall(L, 1, 1, 0);
-
-        lua_getglobal(L, "set_x");
-        lua_pushnumber(L, g_clients[i].x);
-        lua_pcall(L, 1, 1, 0);
-
-        lua_getglobal(L, "set_y");
-        lua_pushnumber(L, g_clients[i].y);
-        lua_pcall(L, 1, 1, 0);
-
-        lua_getglobal(L, "set_level");
-        lua_pushnumber(L, g_clients[i].level);
-        lua_pcall(L, 1, 1, 0);
-
-        lua_getglobal(L, "set_hp");
-        lua_pushnumber(L, g_clients[i].hp);
-        lua_pcall(L, 1, 1, 0);
-
-        lua_getglobal(L, "set_move_type");
-        lua_pushnumber(L, g_clients[i].fixed);
-        lua_pcall(L, 1, 1, 0);
-
-        lua_getglobal(L, "set_attack_type");
-        lua_pushnumber(L, g_clients[i].attack_type);
-        lua_pcall(L, 1, 1, 0);
-
-
-        lua_register(L, "API_SendMessage", API_SendMessage);
-        lua_register(L, "API_get_x", API_get_x);
-        lua_register(L, "API_get_y", API_get_y);
-
-    }
-    cout << "NPC initialize finished." << endl;
-}
-
-bool same_position(short x, short y, short x1, short y1) {
-    if (x == x1 && y == y1)
-        return true;
-    else
-        return false;
-}
-
-void random_move_npc(int id)
-{
-    if (g_clients[id].live == false) return;
-    //고정 캐릭터 일 경우 move 안함
-    if (g_clients[id].fixed == true) return;
-
-    if (g_clients[id].attack == true) return;
-    //플레이어 뷰리스트를 갱신해줘야 함 NPC가 들어갈 때와 나갈 떄
-    unordered_set <int> old_viewlist;
-    for (int i = 0; i < MAX_USER; ++i) {
-        if (false == g_clients[i].in_use) continue;
-        if (true == is_near(id, i)) old_viewlist.insert(i);
-    }
-
-    //LUA
-    g_clients[id].lua_lock.lock();
-    lua_getglobal(g_clients[id].L, "my_x");		
-    int x = lua_tonumber(g_clients[id].L, -1); 
-    lua_getglobal(g_clients[id].L, "my_y");
-    int y = lua_tonumber(g_clients[id].L, -1);
-    lua_pop(g_clients[id].L, 2);
-    g_clients[id].lua_lock.unlock();
-
-    //int  x = g_clients[id].x;
-    //int  y = g_clients[id].y;
-
-    //움직이는 NPC 범위 내 이동
-    if (!is_in_moverange(x, y, g_clients[id].first_x, g_clients[id].first_y, 20))
-    {
-        while (true) {
-            switch (rand() % 4)
-            {
-            case 0: if (x > 0) x--; break;
-            case 1: if (x < (WORLD_WIDTH - 1)) x++; break;
-            case 2: if (y > 0) y--; break;
-            case 3: if (y < (WORLD_HEIGHT - 1)) y++; break;
-            }
-            if (is_in_moverange(x, y, g_clients[id].first_x, g_clients[id].first_y, 20)) break;
-            x = g_clients[id].x;
-            y = g_clients[id].y;
-        }
-    }
-    else
-    {
-        switch (rand() % 4)
-        {
-        case 0: if (x > 0) x--; break;
-        case 1: if (x < (WORLD_WIDTH - 1)) x++; break;
-        case 2: if (y > 0) y--; break;
-        case 3: if (y < (WORLD_HEIGHT - 1)) y++; break;
-        }
-    }
-
-    if (g_clients[id].attack_type == true) {
-        int chase_player_id = -1;
-        for (int i = 0; i < MAX_USER; ++i) {
-            if (id == i) continue;
-            if (false == g_clients[i].in_use) continue;
-            if (true == is_near_dis(id, i, 10)) {
-                chase_player_id = i;
-                //cout << "ID"<<i << endl;
-                break;
-            }
-        }
-        if (chase_player_id != -1) {
-            if (g_clients[chase_player_id].in_use == true) {
-                if (!same_position(g_clients[id].x, g_clients[id].y, g_clients[chase_player_id].x, g_clients[chase_player_id].y))
-                {
-                    //cout << g_clients[id].x << "    " << g_clients[id].y << endl;
-                    //cout << g_clients[chase_player_id].x << "   " << g_clients[chase_player_id].y << endl;
-                    Astar::Coordinate A(g_clients[id].x, g_clients[id].y);
-                    Astar::Coordinate B(g_clients[chase_player_id].x, g_clients[chase_player_id].y);
-
-                    Astar astar(A, B);
-                    //cout << astar.GetPos(2).x << "   " << astar.GetPos(2).y << endl;
-                    int x1, y1;
-                    x1 = astar.GetPos(2).x;
-                    y1 = astar.GetPos(2).y;
-                    if (is_in_moverange(x1, y1, g_clients[id].first_x, g_clients[id].first_y, 20))
-                    {
-                        x = x1;
-                        y = y1;
-                    }
-                    //cout << "x: " << x << "y: " << y << endl;
-                    //공격 범위에 들어오면 공격
-                    if (is_in_normal_attack_range(id, chase_player_id)) {
-                        if (g_clients[id].attack == false) {
-                            g_clients[id].attack_1s_time = true;
-                            add_timer(id, OP_NPC_ATTACK_1s, system_clock::now() + 1000ms, chase_player_id);
-                        }
-                    }
-                }
-                else {
-                    //cout << "same posi" << endl;
-                    x = g_clients[id].x;
-                    y = g_clients[id].y;
-                    //어그로 몬스터가 플레이어 좌표와 같아지면 공격
-                    if (g_clients[id].attack == false) {
-                        g_clients[id].attack_1s_time = true;
-                        add_timer(id, OP_NPC_ATTACK_1s, system_clock::now() + 1000ms, chase_player_id);
-                    }
-                }
-            }
-        }
-    }
-
-    //장애물 충돌처리
-    bool collision_obtacle = false;
-    for (int i = 0; i < NUM_OBTACLE; i++)
-    {
-        if (ob_positions[i].x == x && ob_positions[i].y == y)
-            collision_obtacle = true;
-    }
-
-    if (!collision_obtacle) {
-        g_clients[id].x = x;
-        g_clients[id].y = y;
-
-
-        //LUA
-        g_clients[id].lua_lock.lock();
-        lua_getglobal(g_clients[id].L, "set_x");
-        lua_pushnumber(g_clients[id].L, g_clients[id].x);
-        lua_pcall(g_clients[id].L, 1, 1, 0);
-        lua_getglobal(g_clients[id].L, "set_y");
-        lua_pushnumber(g_clients[id].L, g_clients[id].y);
-        lua_pcall(g_clients[id].L, 1, 1, 0);
-        g_clients[id].lua_lock.unlock();
-
-    }
-
-    if (0 <= g_clients[id].x && g_clients[id].x <= 400 && 0 <= g_clients[id].y && g_clients[id].y <= 400) {
-        if (std::find(sec1.begin(), sec1.end(), id) != sec1.end() == false) {
-            sec1.push_back(id);
-            sec2.erase(std::remove(sec2.begin(), sec2.end(), id), sec2.end());
-            sec3.erase(std::remove(sec3.begin(), sec3.end(), id), sec3.end());
-        }
-    }
-    else if (401 <= g_clients[id].x && g_clients[id].x <= 800 && 0 <= g_clients[id].y && g_clients[id].y <= 400) {
-        if (std::find(sec2.begin(), sec2.end(), id) != sec2.end() == false) {
-            sec2.push_back(id);
-            sec1.erase(std::remove(sec1.begin(), sec1.end(), id), sec1.end());
-            sec4.erase(std::remove(sec4.begin(), sec4.end(), id), sec4.end());
-        }
-    }
-    else if (0 <= g_clients[id].x && g_clients[id].x <= 400 && 401 <= g_clients[id].y && g_clients[id].y <= 800) {
-        if (std::find(sec3.begin(), sec3.end(), id) != sec3.end() == false) {
-            sec3.push_back(id);
-            sec1.erase(std::remove(sec1.begin(), sec1.end(), id), sec1.end());
-            sec4.erase(std::remove(sec4.begin(), sec4.end(), id), sec4.end());
-        }
-    }
-    else if (401 <= g_clients[id].x && g_clients[id].x <= 800 && 401 <= g_clients[id].y && g_clients[id].y <= 800) {
-        if (std::find(sec4.begin(), sec4.end(), id) != sec4.end() == false) {
-            sec4.push_back(id);
-            sec2.erase(std::remove(sec2.begin(), sec2.end(), id), sec2.end());
-            sec3.erase(std::remove(sec3.begin(), sec3.end(), id), sec3.end());
-        }
-    }
-    else
-        cout << "Sector Move Error" << endl;
-
-    unordered_set <int> new_viewlist;
-    for (int i = 0; i < MAX_USER; ++i) {
-        if (id == i) continue;
-        if (false == g_clients[i].in_use) continue;
-        if (true == is_near(id, i)) {
-            new_viewlist.insert(i);
-        }
-        else
-            g_clients[id].is_active = false;
-    }
-
-    for (auto pl : old_viewlist) {
-        if (0 < new_viewlist.count(pl)) {
-            //멀티 스레드이기 때문에 뷰리스트에 있는지 없는지 확실하지 않음
-            if (0 < g_clients[pl].view_list.count(id))
-                send_move_packet(pl, id);
-            else
-            {
-                g_clients[pl].view_list.insert(id);
-                send_enter_packet(pl, id);
-            }
-        }
-        else
-        {
-            if (0 < g_clients[pl].view_list.count(id)) {
-                g_clients[pl].view_list.erase(id);
-                send_leave_packet(pl, id);
-                g_clients[id].is_active = false;
-            }
-        }
-    }
-
-    for (auto pl : new_viewlist) {
-        if (0 == g_clients[pl].view_list.count(pl)) {
-            if (0 == g_clients[pl].view_list.count(id)) {
-                g_clients[pl].view_list.insert(id);
-                send_enter_packet(pl, id);
-            }
-            else
-                send_move_packet(pl, id);
-        }
-    }
-
-    if (true == new_viewlist.empty()) {
-        g_clients[id].is_active = false;
-    }
-    else {
-        add_timer(id, OP_RANDOM_MOVE, system_clock::now() + 1000ms, 0);
-    }
-
-    g_clients[id].lua_lock.lock();
-    lua_getglobal(g_clients[id].L, "count_move");
-    lua_pcall(g_clients[id].L, 0, 0, 0);
-    g_clients[id].lua_lock.unlock();
-}
-
-//DataBase
+//DataBase  관련 함수
 void show_error(SQLHANDLE hHandle, SQLSMALLINT hType, RETCODE RetCode)
 {
     SQLSMALLINT iRec = 0;
@@ -2982,6 +3001,7 @@ void update_db(int id, int x, int y, int hp, int level, int exp, int f_x, int f_
         SQLFreeHandle(SQL_HANDLE_ENV, henv);
     }
 }
+
 
 int main()
 {

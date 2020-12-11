@@ -3,14 +3,14 @@
 
 constexpr int SERVER_PORT = 3500;
 constexpr int MAX_ID_LEN = 10;
-constexpr int MAX_USER = 10000;
+constexpr int MAX_USER = 20000;
 constexpr int WORLD_WIDTH = 800;
 constexpr int WORLD_HEIGHT = 800;
 constexpr int MAX_STR_LEN = 100;
 constexpr int VIEW_LIMIT = 7;
 
 
-constexpr int NUM_NPC = 10000;
+constexpr int NUM_NPC = 1000;
 constexpr int NUM_OBTACLE = 2000;
 constexpr int NUM_ITEM = 2000;
 #pragma pack (push, 1)

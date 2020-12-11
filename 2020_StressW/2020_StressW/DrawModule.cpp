@@ -132,7 +132,7 @@ int DrawGLScene(GLvoid)									// Here's Where We Do All The Drawing
 
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);	// Clear Screen And Depth Buffer
 	glLoadIdentity();									// Reset The Current Modelview Matrix
-	glTranslatef(0.14f, -0.4f, -1.0f);						// Move One Unit Into The Screen
+	glTranslatef(0.0f, -0.4f, -1.0f);						// Move One Unit Into The Screen
 															// Pulsing Colors Based On Text Position
 	glColor3f(1, 1, 0);
 	// Position The Text On The Screen
