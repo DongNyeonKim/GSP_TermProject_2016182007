@@ -2556,7 +2556,12 @@ void process_packet(int id)
     }
     case CS_ATTACK: {
         cs_packet_attack* p = reinterpret_cast<cs_packet_attack*>(g_clients[id].m_packet_start);
-        process_attack(id, p->attack_type);
+        process_attack(id, AT_NORMAL);
+        break;
+    }
+    case CS_RANGE_ATTACK: {
+        cs_packet_range_attack* p = reinterpret_cast<cs_packet_range_attack*>(g_clients[id].m_packet_start);
+        process_attack(id, AT_RANGE);
         break;
     }
     case CS_LOGOUT: {

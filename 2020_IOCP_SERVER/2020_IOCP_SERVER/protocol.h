@@ -10,7 +10,8 @@ constexpr int MAX_STR_LEN = 100;
 constexpr int VIEW_LIMIT = 7;
 
 
-constexpr int NUM_NPC = 100000;
+constexpr int NUM_NPC = 10000;
+
 constexpr int NUM_OBTACLE = 2000;
 constexpr int NUM_ITEM = 2000;
 #pragma pack (push, 1)
@@ -30,6 +31,7 @@ constexpr char CS_ATTACK = 2;
 constexpr char CS_CHAT = 3;
 constexpr char CS_LOGOUT = 4;
 constexpr char CS_TELEORT = 5;
+constexpr char CS_RANGE_ATTACK = 6;
 
 //플레이어 공격 데미지
 const short PLAYER_ATTACK_DAMAGE = 50;
@@ -97,7 +99,6 @@ struct sc_packet_stat_chage {
 	char npc_name[MAX_ID_LEN];
 };
 
-
 struct sc_packet_item_posi {
 	char  size;
 	char  type;
@@ -124,12 +125,18 @@ struct cs_packet_move {
 	char  direction;
 	int	  move_time;
 };
+
 constexpr int AT_NORMAL = 0;
 constexpr int AT_RANGE = 1;
+
 struct cs_packet_attack {
 	char  size;
 	char  type;
-	int attack_type;
+};
+
+struct cs_packet_range_attack {
+	char  size;
+	char  type;
 };
 
 struct cs_packet_chat {
