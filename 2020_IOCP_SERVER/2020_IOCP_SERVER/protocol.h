@@ -10,7 +10,7 @@ constexpr int MAX_STR_LEN = 100;
 constexpr int VIEW_LIMIT = 7;
 
 
-constexpr int NUM_NPC = 10000;
+constexpr int NUM_NPC = 100000;
 
 constexpr int NUM_OBTACLE = 2000;
 constexpr int NUM_ITEM = 2000;
